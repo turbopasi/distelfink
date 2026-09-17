@@ -44,6 +44,7 @@ export function StartScreen() {
     <main className="start-screen">
       {/* Wortmarke als CSS-Maske: die Fläche erbt currentColor und läuft
           dadurch in allen Themes mit, statt zwei Farbvarianten zu pflegen. */}
+      <img className="app-mark" src="/brand/distelfink-icon.svg" alt="" width="96" height="96" />
       <h1 className="wordmark">
         <span className="wordmark-mark" role="img" aria-label="Distelfink" />
       </h1>

@@ -10,6 +10,16 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.9.1 — 2026-09-18
+
+### Geändert
+
+- **Distelfink hat ein eigenes Signet.** Bisher trug die Anwendung nur die
+  Wortmarke und ein Platzhalter-Icon aus der Gesabbel-Zeit. Der Stieglitz-Kopf
+  steckt jetzt im Programm-Icon, in der Taskleiste, im Installer, auf dem
+  Startbildschirm, im Fenster „Über Distelfink“ sowie auf der Website und im
+  Repository. Quelle aller Größen ist `public/brand/distelfink-icon.svg`.
+
 ## 0.9.0 — 2026-09-10
 
 ### Geändert

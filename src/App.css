@@ -271,6 +271,19 @@ button.icon-button.on {
   line-height: 0;
 }
 
+/* Signet: anders als die Wortmarke traegt es eigene Farben und wird darum
+   als Bild eingebunden, nicht als Maske. */
+.app-mark {
+  display: block;
+  width: 6rem;
+  height: 6rem;
+}
+
+.about-body .app-mark {
+  width: 4rem;
+  height: 4rem;
+}
+
 .wordmark-mark {
   display: block;
   width: min(20rem, 70vw);

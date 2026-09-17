@@ -1,6 +1,6 @@
 [package]
 name = "distelfink"
-version = "0.9.0"
+version = "0.9.1"
 description = "Desktop-Schreibsoftware für Autoren"
 authors = ["Pascal Lamers"]
 license = "Apache-2.0"

@@ -1,7 +1,11 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/distelfink-wordmark-on-dark.svg">
-  <img src="public/brand/distelfink-wordmark.svg" alt="Distelfink" width="320">
-</picture>
+<p>
+  <img src="public/brand/distelfink-icon.svg" alt="" width="72" valign="middle">
+  &nbsp;
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/distelfink-wordmark-on-dark.svg">
+    <img src="public/brand/distelfink-wordmark.svg" alt="Distelfink" width="280" valign="middle">
+  </picture>
+</p>
 
 Desktop-Schreibsoftware für Autoren, gebaut mit Tauri 2.x (React + TypeScript + Vite).
 Bringt Binder, Corkboard, Zeitstrahl, Personen-/Ortsdatenbank, deutsche Normseite und
@@ -144,6 +148,9 @@ hat jemand eine andere 0.1.1 installiert und sieht nie ein Update.
 - `src/` — React-Frontend
 - `src-tauri/` — Rust-Backend (Tauri Commands)
 - `docs/` — Landing Page für GitHub Pages (samt Impressum)
+- `public/brand/distelfink-icon.svg` — Signet als Quelle aller Icons; nach einer
+  Änderung `npx tauri icon public/brand/distelfink-icon.svg` laufen lassen und
+  die Kopien in `docs/` (`app-icon.png`, `icon-256.png`, `brand/`) nachziehen
 - `.github/workflows/build.yml` — CI-Builds für Windows + Linux
 - `.github/workflows/release.yml` — Release aus einem Tag `v*` (signierte
   Installer + `latest.json` fürs Selbst-Update)

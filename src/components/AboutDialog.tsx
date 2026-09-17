@@ -36,6 +36,7 @@ function AboutDialog() {
           </button>
         </header>
         <div className="about-body">
+          <img className="app-mark" src="/brand/distelfink-icon.svg" alt="" width="64" height="64" />
           <span className="wordmark-mark" role="img" aria-label="Distelfink" />
           <p className="muted">Desktop-Schreibsoftware für Autoren</p>
           <dl className="about-facts">
