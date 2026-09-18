@@ -1,5 +1,6 @@
-// Oberfläche der Planungs-Tags: das Suchfeld nach "/person " und die
-// Namensvorschau beim Überfahren eines fertigen Tags.
+// Oberfläche der Planungs-Tags: das Suchfeld (nach "/person " oder aus dem
+// Rechtsklick-Menü für markierten Text) und die Namensvorschau beim
+// Überfahren eines fertigen Tags.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";

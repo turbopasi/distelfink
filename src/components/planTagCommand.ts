@@ -6,6 +6,10 @@
 // "der Mann"), hängt am Satz. Solange geschrieben wird, trägt dieses Plugin den
 // Mark laufend nach (appendTransaction); der Mark selbst ist `inclusive: false`,
 // damit der Tag nach dem Abschließen nicht weiterwächst.
+//
+// Zweiter Weg zum selben Suchfeld: markierter Text, Rechtsklick, „Verlinken
+// mit“ (siehe EditorContextMenu). Dort steht das Label schon fest — die
+// Auswahl im Suchfeld setzt den Mark sofort über die Markierung.
 
 import { Extension } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
@@ -15,8 +19,10 @@ import { PLAN_TAG_MARK } from "./PlanTag";
 import { PLAN_TAG_KINDS, type PlanTagKind } from "../planTags";
 
 export type PlanTagCommandState =
-  /** Suchfeld offen, es ist noch nichts im Dokument passiert. */
-  | { phase: "picker"; kind: PlanTagKind; from: number }
+  /** Suchfeld offen, es ist noch nichts im Dokument passiert.
+   *  `to` gesetzt = bereits markierter Text wird verlinkt (Rechtsklick-Menü),
+   *  statt den Tag leer zu eröffnen und das Label erst zu tippen. */
+  | { phase: "picker"; kind: PlanTagKind; from: number; to?: number }
   /** Tag eröffnet, das Label wird gerade getippt. */
   | { phase: "compose"; kind: PlanTagKind; id: string; name: string; from: number }
   | null;
@@ -38,6 +44,15 @@ function triggerAllowed(state: EditorState, start: number): boolean {
 
 function decorations(state: EditorState): DecorationSet {
   const value = getPlanTagCommandState(state);
+  // Markierter Text, während das Suchfeld den Fokus hat: die Auswahl des
+  // Browsers ist dann unsichtbar — sie muss sichtbar bleiben, damit klar ist,
+  // welche Wörter der Tag umfasst.
+  if (value?.phase === "picker") {
+    if (value.to === undefined || value.to <= value.from) return DecorationSet.empty;
+    return DecorationSet.create(state.doc, [
+      Decoration.inline(value.from, value.to, { class: "plan-tag-selection" }),
+    ]);
+  }
   if (!value || value.phase !== "compose") return DecorationSet.empty;
   const head = state.selection.head;
   if (head > value.from) {
@@ -78,7 +93,8 @@ function planTagCommandPlugin() {
           // Der Fokus liegt im Suchfeld; alles, was am Dokument passiert,
           // kommt von außen und beendet das Kommando.
           if (tr.docChanged) return null;
-          return { ...value, from };
+          if (value.to === undefined) return { ...value, from };
+          return { ...value, from, to: tr.mapping.map(value.to, 1) };
         }
 
         const selection = newState.selection;
@@ -141,18 +157,40 @@ function planTagCommandPlugin() {
   });
 }
 
-/** Übernimmt die Auswahl aus dem Suchfeld und eröffnet den leeren Tag. */
+/** Öffnet das Suchfeld für bereits markierten Text (Rechtsklick → Verlinken). */
+export function startPlanTagForSelection(editor: Editor, kind: PlanTagKind): boolean {
+  const { from, to } = editor.state.selection;
+  if (from >= to) return false;
+  const tr = editor.state.tr.setMeta(planTagCommandKey, {
+    phase: "picker",
+    kind,
+    from,
+    to,
+  });
+  editor.view.dispatch(tr);
+  return true;
+}
+
+/** Übernimmt die Auswahl aus dem Suchfeld: markierter Text wird sofort
+ *  getaggt, sonst eröffnet sich der leere Tag zum Tippen des Labels. */
 export function choosePlanTagTarget(editor: Editor, id: string, name: string) {
   const value = getPlanTagCommandState(editor.state);
   if (!value || value.phase !== "picker") return;
-  const { kind, from } = value;
+  const { kind, from, to } = value;
   editor
     .chain()
     .focus()
     .command(({ tr, dispatch }) => {
       if (dispatch) {
-        tr.setSelection(TextSelection.create(tr.doc, from));
-        tr.setMeta(planTagCommandKey, { phase: "compose", kind, id, name, from });
+        if (to !== undefined && to > from) {
+          const type = tr.doc.type.schema.marks[PLAN_TAG_MARK];
+          if (type) tr.addMark(from, to, type.create({ kind, id }));
+          tr.setSelection(TextSelection.create(tr.doc, to));
+          tr.setMeta(planTagCommandKey, null);
+        } else {
+          tr.setSelection(TextSelection.create(tr.doc, from));
+          tr.setMeta(planTagCommandKey, { phase: "compose", kind, id, name, from });
+        }
       }
       return true;
     })
@@ -168,7 +206,9 @@ export function cancelPlanTagCommand(editor: Editor) {
     .focus()
     .command(({ tr, dispatch }) => {
       if (dispatch) {
-        if (value.phase === "picker") {
+        // Nur das getippte Kommando wiederherstellen — beim Rechtsklick-Weg
+        // stand nie etwas im Text.
+        if (value.phase === "picker" && value.to === undefined) {
           tr.insertText(`/${value.kind} `, value.from);
         }
         tr.setMeta(planTagCommandKey, null);

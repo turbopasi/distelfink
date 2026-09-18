@@ -8,6 +8,7 @@ import { useStore, type PaneId } from "../store";
 import { docExtensions, getMarkdown, Toolbar, useEditorLanguage } from "./RichEditor";
 import { imagePasteHandler } from "./DocImage";
 import { PlanTagOverlay } from "./PlanTagOverlay";
+import { EditorContextMenu } from "./EditorContextMenu";
 import type { WriteResult } from "../types";
 
 const AUTOSAVE_MS = 2000;
@@ -146,6 +147,7 @@ function DocEditorInstance({
       <Toolbar editor={editor} />
       <EditorContent editor={editor} className="editor-content doc-editor-content" />
       <PlanTagOverlay editor={editor} paneId={paneId} />
+      <EditorContextMenu editor={editor} paneId={paneId} />
       <footer className="statusbar">
         <span>
           {status === "saved"

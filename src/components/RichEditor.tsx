@@ -17,6 +17,7 @@ import { DocImage, imagePasteHandler } from "./DocImage";
 import { PlanTag } from "./PlanTag";
 import { PlanTagCommand } from "./planTagCommand";
 import { PlanTagOverlay } from "./PlanTagOverlay";
+import { EditorContextMenu } from "./EditorContextMenu";
 import { SceneBreak, SCENE_BREAK_NODE } from "./SceneBreak";
 import { Icon } from "./Icon";
 import {
@@ -174,6 +175,7 @@ function EditorInstance({
         className={`editor-content ${typewriter ? "typewriter" : ""}`}
       />
       <PlanTagOverlay editor={editor} paneId={paneId} />
+      <EditorContextMenu editor={editor} paneId={paneId} />
       <StatusBar editor={editor} paneId={paneId} />
     </>
   );

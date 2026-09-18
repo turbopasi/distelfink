@@ -1342,7 +1342,7 @@ li.chapter > .binder-row > .binder-title {
    positionierte Bildebene über dem nicht positionierten Text landen.
    Ausgenommen sind die frei schwebenden Overlays: die bringen ihre eigene
    Positionierung samt z-index mit. */
-.editor > *:not(.doc-backdrop):not(.plan-tag-popup):not(.plan-tag-tooltip) {
+.editor > *:not(.doc-backdrop):not(.plan-tag-popup):not(.plan-tag-tooltip):not(.context-menu) {
   position: relative;
   z-index: 1;
 }
@@ -1620,6 +1620,12 @@ li.chapter > .binder-row > .binder-title {
 /* Label wird gerade getippt. */
 .plan-tag-composing {
   border-bottom: 1px dashed currentColor;
+}
+
+/* Markierung, die gerade verlinkt wird: der Fokus liegt im Suchfeld, damit
+   verschwindet die echte Auswahl — diese hält sie sichtbar. */
+.plan-tag-selection {
+  background: var(--editor-selection);
 }
 
 .plan-tag-popup,
