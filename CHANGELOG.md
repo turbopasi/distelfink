@@ -10,6 +10,34 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.10.0 — 2026-09-19
+
+### Neu
+
+- **Markierten Text per Rechtsklick verknüpfen.** Ein Planungs-Tag entstand
+  bisher nur über „/person " und Verwandte: Tag leer eröffnen, Label tippen,
+  ENTER. Für ein Wort, das längst dasteht, war das der falsche Weg herum.
+  Jetzt reicht markieren, Rechtsklick, „Verlinken mit" — die Auswahl im
+  Suchfeld legt sich sofort über die Markierung, samt „neu anlegen", wenn es
+  die Person, den Ort oder die Notiz noch nicht gibt. Über einem fertigen Tag
+  bietet dasselbe Menü „Öffnen" und „Verknüpfung lösen" an, die bisher nur die
+  Vorschau beim Überfahren kannte.
+
+  Das Menü erscheint bewusst nicht bei jedem Rechtsklick im Editor: über einem
+  Wort mit blinkendem Cursor bleibt das native Menü stehen, weil dort die
+  Rechtschreibvorschläge hängen.
+
+### Geändert
+
+- **Der Status hängt als Fähnchen an der Oberkante der Karte.** In der
+  Ordnerübersicht teilte sich die Statuspille die Kopfzeile mit dem Titel. Auf
+  schmalen Karten ging das nicht auf — „ÜBERARBEITUNG" ist fast so breit wie
+  eine Karte und quetschte den Titel zu einer Wortsäule. Die Pille sitzt jetzt
+  halb über der Kartenkante, der Titel hat die volle Breite, und der Zustand
+  einer Karte ist zu sehen, bevor man ihren Namen liest. Das Symbol im Titel
+  bleibt dabei auf der ersten Zeile, statt neben einem umbrochenen Titel mittig
+  zu schweben.
+
 ## 0.9.1 — 2026-09-18
 
 ### Geändert
