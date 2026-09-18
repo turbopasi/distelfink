@@ -1111,11 +1111,15 @@ li.chapter > .binder-row > .binder-title {
 }
 
 .card {
+  /* Bezugsrahmen fuer das Status-Faehnchen auf der Oberkante. */
+  position: relative;
   background: var(--surface-card);
   border: 1px solid var(--border-subtle);
   border-top: 3px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: var(--space-5);
+  /* Oben etwas mehr Luft: dort haengt das Status-Faehnchen ueber der Kante und
+     braucht Abstand zum Titel. */
+  padding: var(--space-7) var(--space-5) var(--space-5);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -1177,21 +1181,21 @@ li.chapter > .binder-row > .binder-title {
 
 /* Kopf der Karte: Titel links, Status als Pille rechts. Gesetzt wird beides
    ueber das Rechtsklick-Menue — die Karte zeigt nur. */
+/* Der Titel hat die Zeile fuer sich — der Status haengt als Faehnchen an der
+   Oberkante (siehe .card > .status-pill). */
 .card-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
 }
 
-.card-head .card-title {
+.card-head .card-title,
+.card-title-input {
   flex: 1;
   min-width: 0;
 }
 
 .card-title-input {
-  flex: 1;
-  min-width: 0;
   min-height: var(--control-height-sm);
   padding: 0 var(--space-2);
   font-family: var(--font-serif);
@@ -1209,6 +1213,23 @@ li.chapter > .binder-row > .binder-title {
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+/* Der Status als Faehnchen, das ueber der Oberkante steht: auf schmalen
+   Karten hat der Titel damit die ganze Breite, und der Zustand ist schon zu
+   sehen, bevor man den Namen liest. Der Rand traegt es auch dort, wo die
+   Fuellfarbe dem Korkbrett gleicht (Entwurf). */
+.card > .status-pill {
+  position: absolute;
+  top: 0;
+  right: var(--space-5);
+  /* Haelfte ueber der Kante, Haelfte im Innenabstand — ueber dem Titel. */
+  transform: translateY(-50%);
+  max-width: calc(100% - 2 * var(--space-5));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-1);
 }
 
 .status-pill.status-draft {
@@ -3510,10 +3531,17 @@ li.chapter > .binder-row > .binder-title {
   color: var(--text-faint);
 }
 
+/* Das Symbol gehoert zur ersten Zeile: bei einem umbrochenen Titel schwebte es
+   sonst mittig neben dem ganzen Block. Der Versatz setzt es optisch auf die
+   Mitte der ersten Zeile. */
 .card-title {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
+}
+
+.card-title > .icon {
+  margin-top: calc((var(--leading-snug) * 1em - var(--icon-md)) / 2);
 }
 
 .mentions-toggle {

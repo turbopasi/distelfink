@@ -254,6 +254,8 @@ function Card({ node, parentId }: { node: BinderNode; parentId: string }) {
       onContextMenu={(e) => !editing && openMenu(e, menuItems())}
       style={node.color ? { borderTopColor: node.color } : undefined}
     >
+      <StatusPill status={statusOf(node)} />
+
       <div className="card-head">
         {editing ? (
           <input
@@ -276,7 +278,6 @@ function Card({ node, parentId }: { node: BinderNode; parentId: string }) {
             {node.title}
           </div>
         )}
-        <StatusPill status={statusOf(node)} />
       </div>
 
       {node.image && <CardImage rel={node.image} />}
