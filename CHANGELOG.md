@@ -10,6 +10,41 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.11.0 — 2026-09-21
+
+### Neu
+
+- **Personen im Zeitstrahl.** Ereigniskarten haben einen Abschnitt
+  „Verknüpfte Personen": wer im Ereignis vorkommt, steht als Reihe runder
+  Avatare darin — mit Bild, sonst mit Initialen, der Name im Tooltip. Ein Klick
+  öffnet die Person nebenan, ein Rechtsklick löst die Verknüpfung.
+- **Verknüpfen per Drag & Drop.** Dokumente aus dem Binder und Personen aus
+  der Seitenleiste lassen sich einfach auf eine Ereigniskarte ziehen, egal
+  wohin auf der Karte. Beim Überfahren zeigt sie eine gestrichelte Kante und
+  darunter schon, wie der Eintrag nach dem Loslassen dasteht. Ist er bereits
+  verknüpft, verweigert der Zeiger, und der vorhandene Eintrag leuchtet auf.
+
+### Geändert
+
+- **Aufgeräumte Verknüpfungen.** Verknüpfte Dokumente stehen als schlichte,
+  linksbündige Liste aus Symbol und Titel statt als Chips. Das Dropdown am
+  Fuß ist einem kleinen gestrichelten Plus neben der Überschrift gewichen;
+  sein Menü ist aufgebaut wie der Binder, Kapitel klappen als Untermenü auf,
+  Verknüpftes trägt ein Häkchen. Das gilt auch bei Personen und Orten.
+- **Lange Ereignistitel brechen um,** statt seitlich aus der Karte zu laufen.
+- **Kein Browser-Menü mehr auf leeren Flächen.** Ein Rechtsklick neben die
+  Inhalte bot bisher „Neu laden" und „Untersuchen" an. In Textfeldern und im
+  Editor bleibt das Menü stehen — dort hängen die Rechtschreibvorschläge.
+
+### Behoben
+
+- Ein Untermenü, das über den Nachbarstrang des Zeitstrahls ausklappte, lag
+  hinter dessen Karten und wirkte durchsichtig.
+- Nachdem man eine Karte in einen anderen Strang gezogen hatte, konnte ein
+  späteres Ziehen auf einen leeren Slot die alte Karte noch einmal verschieben.
+- Ein ganz geleerter Ereignistitel blieb leer stehen, statt auf den alten
+  zurückzuspringen.
+
 ## 0.10.0 — 2026-09-19
 
 ### Neu
