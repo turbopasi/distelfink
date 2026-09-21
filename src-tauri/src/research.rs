@@ -922,6 +922,7 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
                 when: String::new(),
                 description: String::new(),
                 scene_ids: Vec::new(),
+                character_ids: Vec::new(),
                 track_id: String::new(),
                 slot: None,
             }],
@@ -946,6 +947,7 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
                 when: String::new(),
                 description: String::new(),
                 scene_ids: Vec::new(),
+                character_ids: Vec::new(),
                 track_id: "weg".into(),
                 slot: None,
             }],
@@ -963,6 +965,7 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
             when: String::new(),
             description: String::new(),
             scene_ids: Vec::new(),
+            character_ids: Vec::new(),
             track_id: track.into(),
             slot,
         }
@@ -1049,6 +1052,9 @@ pub struct TimelineEvent {
     pub description: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub scene_ids: Vec<String>,
+    /// Personen, die im Ereignis vorkommen (IDs aus characters/).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub character_ids: Vec<String>,
     /// Handlungsstrang, zu dem das Ereignis gehört. Leer heißt "erster
     /// Strang" — so bleiben Dateien aus der Zeit vor den Strängen lesbar.
     #[serde(default, skip_serializing_if = "String::is_empty")]

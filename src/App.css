@@ -2107,71 +2107,179 @@ li.chapter > .binder-row > .binder-title {
   object-fit: cover;
 }
 
-.scene-links {
+/* Ein Abschnitt mit Verknüpfungen (Dokumente, Personen): kleine Überschrift
+   mit Plus, darunter die Verweise. */
+.link-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   margin-top: var(--space-4);
+  border-radius: var(--radius-sm);
 }
 
-.chips {
+/* In der Zeitstrahl-Karte setzt schon deren gap den Abstand. */
+.timeline-card .link-section {
+  margin-top: 0;
+}
+
+/* Liegt ein Dokument aus dem Binder über der Liste, zeigt sie, dass sie es
+   nimmt — leise, es ist nur ein Verweis, der dazukommt. */
+.scene-links.drop-here {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.doc-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Symbol und Titel in einer Zeile: der Verweis liest sich wie eine Zeile im
+   Binder, nicht wie eine zweite Karte. */
+.doc-link {
+  display: flex;
+  align-items: center;
+  /* Die Grundregel für Knöpfe zentriert — eine Liste steht linksbündig. */
+  justify-content: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  min-height: 22px;
+  padding: 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.doc-link .icon {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.doc-link:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--accent);
+}
+
+.doc-link:hover:not(:disabled) .icon {
+  color: var(--accent);
+}
+
+/* Lange Titel enden im Ellipsen-Punkt statt die Karte zu weiten. */
+.doc-link-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Vorschau beim Ziehen: so steht das Dokument nach dem Loslassen in der
+   Liste — gestrichelt, weil es noch nicht dazugehört. */
+.doc-link-pending .doc-link {
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+
+.doc-link-pending .doc-link .icon {
+  color: var(--accent);
+}
+
+/* Das gezogene Dokument ist schon verknüpft: sein Eintrag meldet sich. */
+.doc-links .already .doc-link {
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+
+.link-section-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Das Plus neben der Überschrift: klein und gestrichelt — es bietet an,
+   drängt sich aber nicht vor die Verweise. */
+.link-add {
+  min-height: 18px;
+  width: 18px;
+  padding: 0;
+  border-style: dashed;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.link-add:hover:not(:disabled) {
+  border-style: dashed;
+  border-color: var(--accent);
+  background: transparent;
+  color: var(--accent);
+}
+
+/* Personen als Reihe runder Avatare; beim Überfahren bekommt der eine den
+   Akzentring. */
+.person-links {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-3);
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
-  align-items: center;
+  gap: var(--space-2);
 }
 
-.chip {
+.person-link {
+  min-height: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+}
+
+.person-link:hover:not(:disabled) {
+  background: none;
+}
+
+.person-link:hover .person-avatar {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* Beim Ziehen: die ankommende Person gestrichelt, eine schon verknüpfte mit
+   Akzentring — dieselbe Sprache wie bei den Dokumenten. */
+.person-link-pending {
+  display: flex;
+  border-radius: var(--radius-pill);
+  outline: 2px dashed var(--accent);
+  outline-offset: 1px;
+}
+
+.person-link-pending .person-avatar {
+  opacity: 0.7;
+}
+
+.person-links .already .person-avatar {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.person-avatar {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--border-subtle);
+  justify-content: center;
+  flex: none;
   border-radius: var(--radius-pill);
-  overflow: hidden;
-  background: var(--surface-card);
+  object-fit: cover;
+  border: 1px solid var(--border-hairline);
   transition: var(--transition-control);
 }
 
-.chip:hover {
-  border-color: var(--border-strong);
-}
-
-.chip-label {
-  border: none;
-  background: none;
-  min-height: 24px;
-  padding: 0 var(--space-2) 0 var(--space-5);
-  color: var(--accent);
-  font-size: var(--text-xs);
-}
-
-.chip-label:hover:not(:disabled) {
-  background: none;
-  color: var(--accent-hover);
-}
-
-.chip-remove {
-  border: none;
-  background: none;
-  min-height: 24px;
-  padding: 0 var(--space-4) 0 var(--space-1);
-  color: var(--text-faint);
-  font-size: var(--text-xs);
-}
-
-.chip-remove:hover:not(:disabled) {
-  background: none;
-  color: var(--status-danger);
-}
-
-.chips select {
-  min-height: 26px;
-  font-size: var(--text-xs);
-  padding: 0 var(--space-4);
-  border: 1px dashed var(--border-subtle);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--text-muted);
-  max-width: 14rem;
+.person-avatar.initials {
+  background: var(--accent-soft);
+  color: var(--text-strong);
+  font-weight: var(--weight-medium);
+  line-height: 1;
 }
 
 /* --------------------------------------------------------------------------
@@ -2413,8 +2521,15 @@ li.chapter > .binder-row > .binder-title {
 
 /* Ziehmarke: die Karte, auf der man landet, bekommt die Akzentkante — was
    dort steht, rückt beim Loslassen einen Slot weiter. */
-.timeline-event.drop-here .timeline-card {
+.timeline-event.drop-move .timeline-card {
   box-shadow: 0 0 0 2px var(--accent), var(--shadow-1);
+}
+
+/* Ein Dokument kommt dazu, die Karte bleibt, wo sie ist: gestrichelte statt
+   durchgezogene Kante, damit man Verknüpfen und Verschieben auseinanderhält. */
+.timeline-event.drop-link .timeline-card {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
 }
 
 .timeline-card {
@@ -2513,6 +2628,11 @@ li.chapter > .binder-row > .binder-title {
   background: transparent;
   padding: 0;
   min-height: auto;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+  /* Umbruch auch dann, wenn ein einzelnes Wort breiter ist als die Karte. */
+  overflow-wrap: anywhere;
 }
 
 .event-title:focus {

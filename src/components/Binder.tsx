@@ -12,6 +12,7 @@ import {
   statusOf,
 } from "./NodeActions";
 import { Icon } from "./Icon";
+import { startSceneDrag } from "./drag";
 
 /** ID des gerade gezogenen Nodes (modulweit, DnD läuft nie parallel). */
 let draggedId: string | null = null;
@@ -227,7 +228,10 @@ function BinderItem({ node }: { node: BinderNode }) {
         onDragStart={(e) => {
           draggedId = node.id;
           e.dataTransfer.setData("text/plain", node.id);
-          e.dataTransfer.effectAllowed = "move";
+          // Ein Dokument lässt sich im Binder verschieben oder anderswo
+          // verknüpfen; das Ziel sagt per dropEffect, welches von beiden.
+          if (node.kind === "scene") startSceneDrag(e, node.id);
+          e.dataTransfer.effectAllowed = node.kind === "scene" ? "linkMove" : "move";
           e.stopPropagation();
         }}
         onDragEnd={() => {
@@ -237,6 +241,7 @@ function BinderItem({ node }: { node: BinderNode }) {
           if (!canDrop()) return;
           e.preventDefault();
           e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
           setDropZone(computeZone(e));
         }}
         onDragLeave={() => setDropZone(null)}

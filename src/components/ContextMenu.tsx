@@ -13,6 +13,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { Icon, type IconName } from "./Icon";
 
 /** Ein anklickbarer Eintrag. */
@@ -138,7 +139,10 @@ export function ContextMenu({
     };
   }, [onClose]);
 
-  return (
+  // Direkt am body: sonst läge das Menü in der Stapelebene seines Aufrufers
+  // (z. B. einer Zeitstrahl-Karte), und was im DOM danach kommt, schöbe sich
+  // über ein ausklappendes Untermenü.
+  return createPortal(
     <div
       ref={ref}
       className="menu-popover context-menu"
@@ -146,7 +150,8 @@ export function ContextMenu({
       style={{ left: pos.left, top: pos.top }}
     >
       <ItemList items={items} onClose={onClose} />
-    </div>
+    </div>,
+    document.body,
   );
 }
 

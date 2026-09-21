@@ -12,12 +12,21 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type DragEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { useStore } from "../store";
+import { PersonLinks } from "./PersonLinks";
 import { SceneLinks } from "./SceneLinks";
+import {
+  PERSON_DRAG_TYPE,
+  SCENE_DRAG_TYPE,
+  draggedPersonId,
+  draggedSceneId,
+  leftFor,
+} from "./drag";
 import {
   ContextMenu,
   openBelow,
@@ -37,6 +46,17 @@ import { Icon } from "./Icon";
 // Das gerade gezogene Ereignis — wie im Korkbrett außerhalb von React: der
 // Zustand gehört zur Mausgeste, nicht zum Bild.
 let draggedEventId: string | null = null;
+
+/** Eigener Datentyp fürs Ziehen von Ereignissen. Wandert eine Karte in einen
+ *  anderen Strang, baut React sie neu auf, und ihr dragend kommt nie an —
+ *  `draggedEventId` bliebe dann stehen. Am Datentyp erkennt ein Ziel dagegen
+ *  sicher, ob gerade wirklich ein Ereignis gezogen wird. */
+const EVENT_DRAG_TYPE = "application/x-distelfink-event";
+
+/** Das Ereignis, das gerade über diesem Element hängt, sonst null. */
+function draggedEvent(e: DragEvent): string | null {
+  return e.dataTransfer.types.includes(EVENT_DRAG_TYPE) ? draggedEventId : null;
+}
 
 /** Fehlt der Slot (Dateien aus der Zeit vor dem Raster), zählt der erste. */
 function slotOf(ev: TimelineEvent) {
@@ -389,8 +409,7 @@ export function TimelinePanel() {
               {Array.from({ length: slots }, (_, slot) => {
                 const ev = cellAt(track.id, slot);
                 const style = { ...lane, ...place(i, slot) };
-                const drop = () =>
-                  draggedEventId && dropEvent(draggedEventId, track.id, slot);
+                const drop = (dragId: string) => dropEvent(dragId, track.id, slot);
                 return ev ? (
                   <EventCard
                     key={ev.id || `${track.id}#${slot}`}
@@ -470,7 +489,7 @@ function EmptySlot({
   style: CSSProperties;
   onAdd: () => void;
   onContextMenu: (e: ReactMouseEvent<HTMLElement>) => void;
-  onDropHere: () => void;
+  onDropHere: (dragId: string) => void;
 }) {
   const [over, setOver] = useState(false);
 
@@ -480,15 +499,18 @@ function EmptySlot({
       style={style}
       onContextMenu={onContextMenu}
       onDragOver={(e) => {
-        if (!draggedEventId) return;
+        if (!draggedEvent(e)) return;
         e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
         setOver(true);
       }}
-      onDragLeave={() => setOver(false)}
+      onDragLeave={(e) => leftFor(e) && setOver(false)}
       onDrop={(e) => {
         e.preventDefault();
         setOver(false);
-        onDropHere();
+        const dragId = draggedEvent(e);
+        draggedEventId = null;
+        if (dragId) onDropHere(dragId);
       }}
     >
       <button className="timeline-slot-add" title="Ereignis anlegen" onClick={onAdd}>
@@ -517,19 +539,39 @@ function EventCard({
   onMove: (dir: -1 | 1) => void;
   onMenu: (e: ReactMouseEvent<HTMLElement>) => void;
   onContextMenu: (e: ReactMouseEvent<HTMLElement>) => void;
-  onDropHere: () => void;
+  onDropHere: (dragId: string) => void;
 }) {
   const [title, setTitle] = useState(event.title);
   const [when, setWhen] = useState(event.when ?? "");
   const [description, setDescription] = useState(event.description ?? "");
-  const [over, setOver] = useState(false);
+  // Was beim Loslassen passiert: ein Ereignis rückt hierher, oder ein Dokument
+  // bzw. eine Person wird verknüpft (dann steht hier, wer).
+  const [over, setOver] = useState<"move" | { kind: "scene" | "person"; id: string } | null>(
+    null,
+  );
+  const linked = event.sceneIds ?? [];
+  const people = event.characterIds ?? [];
+  const isLinked = (o: { kind: "scene" | "person"; id: string }) =>
+    (o.kind === "scene" ? linked : people).includes(o.id);
   // Gezogen wird nur am Griff — die Karte ist voller Textfelder, und wer darin
   // etwas markieren will, soll sie nicht versehentlich verschieben.
   const card = useRef<HTMLDivElement>(null);
+  // Der Titel ist ein Textfeld, damit lange Überschriften umbrechen statt
+  // seitlich aus der Karte zu laufen. Die Höhe folgt dem Inhalt.
+  const titleField = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const field = titleField.current;
+    if (!field) return;
+    field.style.height = "auto";
+    field.style.height = `${field.scrollHeight}px`;
+  }, [title, orientation]);
 
   return (
     <div
-      className={`timeline-event ${over ? "drop-here" : ""}`}
+      className={`timeline-event ${
+        over === "move" ? "drop-move" : over && !isLinked(over) ? "drop-link" : ""
+      }`}
       style={style}
       onContextMenu={(e) => {
         // Im Textfeld gehört der Rechtsklick der Rechtschreibprüfung.
@@ -537,15 +579,47 @@ function EventCard({
         onContextMenu(e);
       }}
       onDragOver={(e) => {
-        if (!draggedEventId || draggedEventId === event.id) return;
+        // Dokumente aus dem Binder und Personen aus der Seitenleiste dürfen
+        // überall auf der Karte landen — man zielt auf das Ereignis, nicht auf
+        // die Liste an seinem Fuß.
+        const scene = draggedSceneId(e);
+        const person = draggedPersonId(e);
+        const target = scene
+          ? ({ kind: "scene", id: scene } as const)
+          : person
+            ? ({ kind: "person", id: person } as const)
+            : null;
+        if (target) {
+          e.preventDefault();
+          // Schon verknüpft: der Zeiger verweigert, der Eintrag in der Liste
+          // leuchtet auf — so sieht man, warum.
+          e.dataTransfer.dropEffect = isLinked(target) ? "none" : "link";
+          setOver(target);
+          return;
+        }
+        const dragged = draggedEvent(e);
+        if (!dragged || dragged === event.id) return;
         e.preventDefault();
-        setOver(true);
+        e.dataTransfer.dropEffect = "move";
+        setOver("move");
       }}
-      onDragLeave={() => setOver(false)}
+      onDragLeave={(e) => leftFor(e) && setOver(null)}
       onDrop={(e) => {
         e.preventDefault();
-        setOver(false);
-        onDropHere();
+        setOver(null);
+        const sceneId = e.dataTransfer.getData(SCENE_DRAG_TYPE);
+        if (sceneId) {
+          if (!linked.includes(sceneId)) onChange({ sceneIds: [...linked, sceneId] });
+          return;
+        }
+        const personId = e.dataTransfer.getData(PERSON_DRAG_TYPE);
+        if (personId) {
+          if (!people.includes(personId)) onChange({ characterIds: [...people, personId] });
+          return;
+        }
+        const dragId = draggedEvent(e);
+        draggedEventId = null;
+        if (dragId && dragId !== event.id) onDropHere(dragId);
       }}
     >
       <div className="timeline-marker" />
@@ -557,6 +631,7 @@ function EventCard({
             draggable
             onDragStart={(e) => {
               draggedEventId = event.id;
+              e.dataTransfer.setData(EVENT_DRAG_TYPE, event.id);
               e.dataTransfer.setData("text/plain", event.id);
               e.dataTransfer.effectAllowed = "move";
               // Am Mauszeiger hängt die ganze Karte, nicht der Griff allein.
@@ -597,11 +672,25 @@ function EventCard({
             </button>
           </span>
         </div>
-        <input
+        <textarea
           className="event-title"
+          ref={titleField}
+          rows={1}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => title.trim() && title !== event.title && onChange({ title })}
+          onKeyDown={(e) => {
+            // Zeilenumbrüche gehören nicht in eine Überschrift: Enter schließt ab.
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+          onBlur={() => {
+            // Ohne Titel geht es nicht: leer zurück auf den alten, sonst getrimmt.
+            const trimmed = title.trim();
+            if (!trimmed) setTitle(event.title);
+            else if (trimmed !== event.title) onChange({ title: trimmed });
+          }}
         />
         <textarea
           className="event-description"
@@ -612,9 +701,15 @@ function EventCard({
             description !== (event.description ?? "") && onChange({ description })
           }
         />
+        <PersonLinks
+          characterIds={people}
+          onChange={(characterIds) => onChange({ characterIds })}
+          incoming={over && over !== "move" && over.kind === "person" ? over.id : null}
+        />
         <SceneLinks
-          sceneIds={event.sceneIds ?? []}
+          sceneIds={linked}
           onChange={(sceneIds) => onChange({ sceneIds })}
+          incoming={over && over !== "move" && over.kind === "scene" ? over.id : null}
         />
       </div>
     </div>

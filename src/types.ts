@@ -72,6 +72,8 @@ export interface TimelineEvent {
   when?: string;
   description?: string;
   sceneIds?: string[];
+  /** Personen, die im Ereignis vorkommen. */
+  characterIds?: string[];
   /** Handlungsstrang; leer heißt „erster Strang" (Dateien vor den Strängen). */
   trackId?: string;
   /** Position auf der gemeinsamen Zeitachse. Gleicher Slot in zwei Strängen

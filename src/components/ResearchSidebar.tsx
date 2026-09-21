@@ -6,6 +6,7 @@ import { RESEARCH_KIND_LABELS } from "./ResearchPane";
 import type { EntityKind } from "../types";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { Icon, type IconName } from "./Icon";
+import { startPersonDrag } from "./drag";
 
 const KIND_ICON: Record<PaneResearchKind, IconName> = {
   characters: "user",
@@ -246,6 +247,9 @@ function ResearchItem({ kind, id, name }: { kind: PaneResearchKind; id: string; 
   return (
     <li
       className={`${isOpen ? "open" : ""} ${menu ? "menu-open" : ""}`}
+      // Personen lassen sich auf Ereignisse im Zeitstrahl ziehen.
+      draggable={kind === "characters" && !editing}
+      onDragStart={(e) => startPersonDrag(e, id)}
       onClick={open}
       onDoubleClick={startRename}
       onContextMenu={(e) => !editing && openMenu(e, menuItems())}
