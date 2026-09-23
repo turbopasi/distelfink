@@ -18,11 +18,14 @@ import {
 import { ask } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { useStore } from "../store";
+import { LocationLinks } from "./LocationLinks";
 import { PersonLinks } from "./PersonLinks";
 import { SceneLinks } from "./SceneLinks";
 import {
+  LOCATION_DRAG_TYPE,
   PERSON_DRAG_TYPE,
   SCENE_DRAG_TYPE,
+  draggedLocationId,
   draggedPersonId,
   draggedSceneId,
   leftFor,
@@ -520,6 +523,15 @@ function EmptySlot({
   );
 }
 
+/** Was gerade über einer Karte hängt und beim Loslassen verknüpft würde. */
+type DropTarget = { kind: "scene" | "person" | "location"; id: string };
+
+/** Die ID für die Liste der genannten Art — sonst null, damit jede Liste nur
+ *  die Vorschau zeigt, die zu ihr gehört. */
+function incomingFor(over: "move" | DropTarget | null, kind: DropTarget["kind"]) {
+  return over && over !== "move" && over.kind === kind ? over.id : null;
+}
+
 function EventCard({
   event,
   style,
@@ -544,15 +556,15 @@ function EventCard({
   const [title, setTitle] = useState(event.title);
   const [when, setWhen] = useState(event.when ?? "");
   const [description, setDescription] = useState(event.description ?? "");
-  // Was beim Loslassen passiert: ein Ereignis rückt hierher, oder ein Dokument
-  // bzw. eine Person wird verknüpft (dann steht hier, wer).
-  const [over, setOver] = useState<"move" | { kind: "scene" | "person"; id: string } | null>(
-    null,
-  );
+  // Was beim Loslassen passiert: ein Ereignis rückt hierher, oder ein Dokument,
+  // eine Person bzw. ein Ort wird verknüpft (dann steht hier, was).
+  const [over, setOver] = useState<"move" | DropTarget | null>(null);
   const linked = event.sceneIds ?? [];
   const people = event.characterIds ?? [];
-  const isLinked = (o: { kind: "scene" | "person"; id: string }) =>
-    (o.kind === "scene" ? linked : people).includes(o.id);
+  const places = event.locationIds ?? [];
+  const listFor = (kind: DropTarget["kind"]) =>
+    kind === "scene" ? linked : kind === "person" ? people : places;
+  const isLinked = (o: DropTarget) => listFor(o.kind).includes(o.id);
   // Gezogen wird nur am Griff — die Karte ist voller Textfelder, und wer darin
   // etwas markieren will, soll sie nicht versehentlich verschieben.
   const card = useRef<HTMLDivElement>(null);
@@ -579,16 +591,19 @@ function EventCard({
         onContextMenu(e);
       }}
       onDragOver={(e) => {
-        // Dokumente aus dem Binder und Personen aus der Seitenleiste dürfen
-        // überall auf der Karte landen — man zielt auf das Ereignis, nicht auf
-        // die Liste an seinem Fuß.
+        // Dokumente aus dem Binder, Personen und Orte aus der Seitenleiste
+        // dürfen überall auf der Karte landen — man zielt auf das Ereignis,
+        // nicht auf die Liste an seinem Fuß.
         const scene = draggedSceneId(e);
         const person = draggedPersonId(e);
-        const target = scene
-          ? ({ kind: "scene", id: scene } as const)
+        const location = draggedLocationId(e);
+        const target: DropTarget | null = scene
+          ? { kind: "scene", id: scene }
           : person
-            ? ({ kind: "person", id: person } as const)
-            : null;
+            ? { kind: "person", id: person }
+            : location
+              ? { kind: "location", id: location }
+              : null;
         if (target) {
           e.preventDefault();
           // Schon verknüpft: der Zeiger verweigert, der Eintrag in der Liste
@@ -615,6 +630,11 @@ function EventCard({
         const personId = e.dataTransfer.getData(PERSON_DRAG_TYPE);
         if (personId) {
           if (!people.includes(personId)) onChange({ characterIds: [...people, personId] });
+          return;
+        }
+        const locationId = e.dataTransfer.getData(LOCATION_DRAG_TYPE);
+        if (locationId) {
+          if (!places.includes(locationId)) onChange({ locationIds: [...places, locationId] });
           return;
         }
         const dragId = draggedEvent(e);
@@ -704,12 +724,17 @@ function EventCard({
         <PersonLinks
           characterIds={people}
           onChange={(characterIds) => onChange({ characterIds })}
-          incoming={over && over !== "move" && over.kind === "person" ? over.id : null}
+          incoming={incomingFor(over, "person")}
+        />
+        <LocationLinks
+          locationIds={places}
+          onChange={(locationIds) => onChange({ locationIds })}
+          incoming={incomingFor(over, "location")}
         />
         <SceneLinks
           sceneIds={linked}
           onChange={(sceneIds) => onChange({ sceneIds })}
-          incoming={over && over !== "move" && over.kind === "scene" ? over.id : null}
+          incoming={incomingFor(over, "scene")}
         />
       </div>
     </div>

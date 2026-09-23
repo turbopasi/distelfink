@@ -7,7 +7,7 @@ export function leftFor(e: DragEvent) {
   return !e.currentTarget.contains(e.relatedTarget as Node | null);
 }
 
-// Verknüpfen per Ziehen: Dokumente aus dem Binder und Personen aus der
+// Verknüpfen per Ziehen: Dokumente aus dem Binder, Personen und Orte aus der
 // Seitenleiste tragen je einen eigenen Datentyp. Beim Überfahren verrät der
 // Browser nur die Datentypen, nicht den Inhalt — am Typ erkennt ein Ziel also,
 // ob es etwas annehmen kann, und die ID merkt sich das Modul (DnD läuft nie
@@ -45,4 +45,21 @@ export function startPersonDrag(e: DragEvent, id: string) {
 /** Welche Person gerade über diesem Element hängt, sonst null. */
 export function draggedPersonId(e: DragEvent): string | null {
   return e.dataTransfer.types.includes(PERSON_DRAG_TYPE) ? draggedPerson : null;
+}
+
+/** Ort aus der Seitenleiste. */
+export const LOCATION_DRAG_TYPE = "application/x-distelfink-location";
+
+let draggedLocation: string | null = null;
+
+export function startLocationDrag(e: DragEvent, id: string) {
+  draggedLocation = id;
+  e.dataTransfer.setData(LOCATION_DRAG_TYPE, id);
+  e.dataTransfer.setData("text/plain", id);
+  e.dataTransfer.effectAllowed = "link";
+}
+
+/** Welcher Ort gerade über diesem Element hängt, sonst null. */
+export function draggedLocationId(e: DragEvent): string | null {
+  return e.dataTransfer.types.includes(LOCATION_DRAG_TYPE) ? draggedLocation : null;
 }
