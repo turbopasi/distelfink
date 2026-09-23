@@ -186,6 +186,11 @@ verwendeten Glyphen stammen ursprünglich aus Feather und stehen zusätzlich unt
 MIT © 2013–present Cole Bemis: arrow-down, arrow-up, chevron-down,
 chevron-right, clock, info, italic, link-2, maximize, plus, search, trash-2, x.
 
+**Farbthemes** (\`src/presetThemes.ts\`) — die Farbwerte der „Weiteren Themes“
+stammen aus daisyUI 5.7.43, MIT © 2020 Pouya Saadeghi (https://daisyui.com).
+daisyUI selbst wird nicht ausgeliefert; übernommen und umgerechnet sind nur die
+Farben.
+
 **libgit2** — über das Crate \`libgit2-sys\` einkompiliert (Version 1.9.7).
 Lizenziert unter GPL-2.0 **mit Linking-Ausnahme**, die das Einbinden in
 Programme beliebiger Lizenz ausdrücklich erlaubt. Auf diese Anwendung wirkt sich
@@ -217,6 +222,7 @@ const ASSET_LICENSES: Array<{ title: string; file: string }> = [
   { title: "Literata — SIL Open Font License 1.1", file: "public/fonts/OFL-Literata.txt" },
   { title: "IBM Plex Sans / IBM Plex Mono — SIL Open Font License 1.1", file: "public/fonts/OFL-IBM-Plex.txt" },
   { title: "Lucide-Symbole — ISC, teilweise zusätzlich MIT (Feather)", file: "src/components/Icon.LICENSE.txt" },
+  { title: "daisyUI-Farbthemes — MIT", file: "src/presetThemes.LICENSE.txt" },
 ];
 
 function render(components: Component[]): string {

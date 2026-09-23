@@ -2,7 +2,18 @@
 // Persistiert werden sie app-weit über das Rust-Backend (settings.json im
 // App-Config-Verzeichnis) — siehe src-tauri/src/settings.rs.
 
-export type ThemeId = "system" | "light" | "dark" | "sepia" | "midnight" | "custom";
+import { PRESET_THEMES, type PresetTheme } from "./presetThemes";
+
+/** Eigene Themes aus styles/tokens.css plus die vorgefertigten aus
+ *  presetThemes.ts ("daisy-…"), die wie "custom" inline gesetzt werden. */
+export type ThemeId =
+  | "system"
+  | "light"
+  | "dark"
+  | "sepia"
+  | "midnight"
+  | "custom"
+  | PresetTheme["id"];
 
 export interface ThemeColors {
   bg: string;
@@ -119,6 +130,10 @@ export const DARK_COLORS: ThemeColors = {
   card: "#1b1a16",
   highlight: "#d8b378",
 };
+
+export function findPreset(id: unknown): PresetTheme | undefined {
+  return PRESET_THEMES.find((t) => t.id === id);
+}
 
 export const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
   { key: "bg", label: "Hintergrund" },
@@ -260,7 +275,10 @@ export function mergeSettings(loaded: unknown): AppSettings {
   if (!loaded || typeof loaded !== "object") return d;
   const l = loaded as Partial<AppSettings>;
   return {
-    theme: THEME_OPTIONS.some((t) => t.id === l.theme) ? (l.theme as ThemeId) : d.theme,
+    theme:
+      THEME_OPTIONS.some((t) => t.id === l.theme) || findPreset(l.theme)
+        ? (l.theme as ThemeId)
+        : d.theme,
     customTheme: { ...d.customTheme, ...(l.customTheme ?? {}) },
     background: { ...d.background, ...(l.background ?? {}) },
     editor: { ...d.editor, ...(l.editor ?? {}) },
@@ -298,20 +316,26 @@ export function applySettings(s: AppSettings) {
   if (s.theme === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", s.theme);
 
-  // Eigenes Theme: Farben inline setzen; sonst Inline-Overrides entfernen,
-  // damit die Stylesheet-Themes greifen.
+  // Eigenes und vorgefertigte Themes: Farben inline setzen; sonst
+  // Inline-Overrides entfernen, damit die Stylesheet-Themes greifen.
+  const preset = findPreset(s.theme);
+  const inline = s.theme === "custom" ? s.customTheme : preset?.colors;
   for (const key of Object.keys(COLOR_VARS) as (keyof ThemeColors)[]) {
-    if (s.theme === "custom") root.style.setProperty(COLOR_VARS[key], s.customTheme[key]);
+    if (inline) root.style.setProperty(COLOR_VARS[key], inline[key]);
     else root.style.removeProperty(COLOR_VARS[key]);
   }
 
-  // Nur bei eigenen Themes muss die App raten, ob sie hell oder dunkel ist:
-  // Betriebssystem-Elemente (Auswahllisten, Bildlaufleisten, Farbwähler)
-  // richten sich nach color-scheme, nicht nach unseren Variablen.
-  if (s.theme === "custom") {
-    root.style.setProperty("--scheme", isDark(s.customTheme.bg) ? "dark" : "light");
+  // Inline-Themes treffen keinen data-theme-Selektor im Stylesheet — Hell oder
+  // Dunkel muss darum hier gesetzt werden: --scheme für die Elemente des
+  // Betriebssystems (Auswahllisten, Bildlaufleisten, Farbwähler), data-scheme
+  // für die dunklen Schatten. Bei eigenen Themes wird geraten.
+  const scheme = preset?.scheme ?? (s.theme === "custom" ? (isDark(s.customTheme.bg) ? "dark" : "light") : null);
+  if (scheme) {
+    root.style.setProperty("--scheme", scheme);
+    root.dataset.scheme = scheme;
   } else {
     root.style.removeProperty("--scheme");
+    delete root.dataset.scheme;
   }
 
   root.style.setProperty("--editor-font", s.editor.fontFamily);

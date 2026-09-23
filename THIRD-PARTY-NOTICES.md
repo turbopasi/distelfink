@@ -28,6 +28,11 @@ verwendeten Glyphen stammen ursprünglich aus Feather und stehen zusätzlich unt
 MIT © 2013–present Cole Bemis: arrow-down, arrow-up, chevron-down,
 chevron-right, clock, info, italic, link-2, maximize, plus, search, trash-2, x.
 
+**Farbthemes** (`src/presetThemes.ts`) — die Farbwerte der „Weiteren Themes“
+stammen aus daisyUI 5.7.43, MIT © 2020 Pouya Saadeghi (https://daisyui.com).
+daisyUI selbst wird nicht ausgeliefert; übernommen und umgerechnet sind nur die
+Farben.
+
 **libgit2** — über das Crate `libgit2-sys` einkompiliert (Version 1.9.7).
 Lizenziert unter GPL-2.0 **mit Linking-Ausnahme**, die das Einbinden in
 Programme beliebiger Lizenz ausdrücklich erlaubt. Auf diese Anwendung wirkt sich
@@ -275,6 +280,32 @@ airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circl
 The MIT License (MIT) (for the icons listed above)
 
 Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+### daisyUI-Farbthemes — MIT
+
+```text
+MIT License
+
+Copyright (c) 2020 Pouya Saadeghi
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

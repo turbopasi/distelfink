@@ -10,10 +10,12 @@ import {
   SHORTCUT_ACTIONS,
   THEME_OPTIONS,
   eventToCombo,
+  findPreset,
   formatCombo,
   type AppSettings,
   type ThemeId,
 } from "../settings";
+import { PRESET_THEMES } from "../presetThemes";
 import { useStore } from "../store";
 
 type Tab = "appearance" | "editor" | "layout" | "shortcuts";
@@ -103,6 +105,29 @@ function AppearanceTab() {
         ))}
       </div>
       {settings.theme === "custom" && <CustomThemeEditor />}
+      <h3>Weitere Themes</h3>
+      <p className="muted small">Farbpaletten nach den Themes von daisyUI.</p>
+      {(["light", "dark"] as const).map((scheme) => (
+        <div key={scheme} className="theme-group">
+          <h4>{scheme === "light" ? "Hell" : "Dunkel"}</h4>
+          <div className="theme-grid">
+            {PRESET_THEMES.filter((t) => t.scheme === scheme).map((t) => (
+              <button
+                key={t.id}
+                className={`theme-swatch-button ${settings.theme === t.id ? "on" : ""}`}
+                onClick={() => pickTheme(t.id)}
+              >
+                <span className="theme-preview" aria-hidden="true">
+                  {[t.colors.bg, t.colors.card, t.colors.accent].map((c, i) => (
+                    <span key={i} style={{ background: c }} />
+                  ))}
+                </span>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
       <BackgroundEditor />
     </>
   );
@@ -235,6 +260,20 @@ function CustomThemeEditor() {
         <button onClick={() => updateSettings({ customTheme: { ...DARK_COLORS } })}>
           Von Dunkel übernehmen
         </button>
+        <select
+          value=""
+          onChange={(e) => {
+            const preset = findPreset(e.target.value);
+            if (preset) updateSettings({ customTheme: { ...preset.colors } });
+          }}
+        >
+          <option value="">Von weiterem Theme übernehmen …</option>
+          {PRESET_THEMES.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
       </div>
       {COLOR_FIELDS.map((f) => (
         <label key={f.key} className="settings-row">
