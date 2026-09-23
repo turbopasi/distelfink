@@ -10,6 +10,36 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.12.0 — 2026-09-24
+
+### Neu
+
+- **Orte im Zeitstrahl.** Ereigniskarten haben einen Abschnitt „Verknüpfte
+  Orte": wo das Ereignis spielt, steht als Liste aus Kartennadel und Namen
+  darin — anders als bei den Personen als Text, weil ein Ort selten ein Bild
+  hat und an zwei Initialen nicht zu erkennen wäre. Ein Klick öffnet den Ort
+  nebenan, ein Rechtsklick löst die Verknüpfung. Verknüpft wird per Drag & Drop
+  aus der Planungsleiste oder über das Plus neben der Überschrift — wie schon
+  bei Dokumenten und Personen.
+- **Vorgefertigte Farbthemes.** Neben Hell, Dunkel, Sepia und Mitternacht steht
+  unter „Weitere Themes" eine Auswahl fertiger Farbpaletten nach den Themes von
+  daisyUI, nach Hell und Dunkel gruppiert und je mit einer dreifarbigen
+  Vorschau. Wer ein eigenes Theme baut, kann eine davon als Ausgangspunkt
+  übernehmen.
+
+### Entfernt
+
+- **Notizen.** Das dritte Planungsdokument neben Personen und Orten hatte kein
+  eigenes Profil: ein Titel und ein Fließtext, also genau das, was ein Dokument
+  im Binder auch kann. Wer etwas notiert, legt es künftig dort ab. Mit den
+  Notizen entfallen ihre Gruppe in der Planungsleiste, ihre Einträge in
+  Schnellsuche und Papierkorb und der Planungs-Tag „/note" im Fließtext.
+- Vorhandene Projekte werden dabei nicht angefasst: der Ordner `notes/` bleibt
+  liegen, die Notizen stehen dort weiter als Markdown-Dateien und lassen sich
+  in jedem Editor öffnen. Alte `note:`-Tags im Manuskript sind ab jetzt
+  gewöhnliche Links — im Export war davon ohnehin nur der sichtbare Text zu
+  sehen.
+
 ## 0.11.0 — 2026-09-21
 
 ### Neu
