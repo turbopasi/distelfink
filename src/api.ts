@@ -6,7 +6,6 @@ import type {
   ExportTemplate,
   Mention,
   NodeKind,
-  NoteInfo,
   ProjectInfo,
   SearchHit,
   Timeline,
@@ -88,16 +87,6 @@ export const api = {
   /** Dokument-Bild als data-URL (null, wenn die Datei fehlt). */
   readDocImage: (rel: string) => invoke<string | null>("read_doc_image", { rel }),
 
-  listNotes: () => invoke<NoteInfo[]>("list_notes"),
-  createNote: (title: string) => invoke<NoteInfo[]>("create_note", { title }),
-  renameNote: (id: string, title: string) =>
-    invoke<NoteInfo[]>("rename_note", { id, title }),
-  duplicateNote: (id: string) => invoke<NoteInfo[]>("duplicate_note", { id }),
-  deleteNote: (id: string) => invoke<NoteInfo[]>("delete_note", { id }),
-  readNote: (id: string) => invoke<string>("read_note", { id }),
-  writeNote: (id: string, content: string, force = false) =>
-    invoke<WriteResult>("write_note", { id, content, force }),
-
   loadTimeline: () => invoke<Timeline>("load_timeline"),
   saveTimeline: (timeline: Timeline) =>
     invoke<Timeline>("save_timeline", { timeline }),
@@ -105,7 +94,7 @@ export const api = {
   searchProject: (query: string) => invoke<SearchHit[]>("search_project", { query }),
 
   /** Alle Stellen, an denen ein Planungs-Tag auf diesen Eintrag zeigt.
-   *  tagKind ist die Tag-Art ("person" | "location" | "note"). */
+   *  tagKind ist die Tag-Art ("person" | "location"). */
   listMentions: (tagKind: string, id: string) =>
     invoke<Mention[]>("list_mentions", { tagKind, id }),
 

@@ -1,4 +1,4 @@
-// Generischer TipTap-Editor für eigenständige Dokumente (Notizen, Personen-/
+// Generischer TipTap-Editor für eigenständige Dokumente (Personen- und
 // Orts-Dokumente): lädt selbst, speichert debounced mit Konflikt-Erkennung und
 // flusht beim Unmount — unabhängig von der Pane-Speicherlogik der Szenen.
 

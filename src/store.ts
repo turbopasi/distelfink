@@ -22,7 +22,7 @@ import type { NodeKind, ProjectInfo } from "./types";
 export type SaveState = "saved" | "dirty" | "saving" | "conflict";
 export type PaneId = "leftTop" | "leftBottom" | "rightTop" | "rightBottom";
 /** Recherche-Inhalte, die in einem Pane angezeigt werden können. */
-export type PaneResearchKind = "characters" | "locations" | "notes";
+export type PaneResearchKind = "characters" | "locations";
 
 export const PANE_IDS: PaneId[] = ["leftTop", "leftBottom", "rightTop", "rightBottom"];
 
@@ -38,7 +38,7 @@ export const PANES_FOR_MODE: Record<LayoutMode, PaneId[]> = {
   grid: PANE_IDS,
 };
 
-/** Auswählbares Ziel für Planungs-Tags (Person, Ort, Notiz). */
+/** Auswählbares Ziel für Planungs-Tags (Person, Ort). */
 export interface PlanIndexEntry {
   id: string;
   name: string;
@@ -48,7 +48,7 @@ export interface PlanIndexEntry {
 
 export type PlanIndex = Record<PaneResearchKind, PlanIndexEntry[]>;
 
-const emptyPlanIndex = (): PlanIndex => ({ characters: [], locations: [], notes: [] });
+const emptyPlanIndex = (): PlanIndex => ({ characters: [], locations: [] });
 
 export interface Pane {
   /** Ausgewählte Szene; im Fluss die zuletzt angesprungene. */
@@ -61,7 +61,7 @@ export interface Pane {
   focusCounter: number;
   /** Kapitel-ID, wenn dieser Pane das Corkboard eines Kapitels zeigt (statt Editor). */
   corkboardId: string | null;
-  /** Recherche-Inhalt (Person/Ort/Notiz) statt Editor. */
+  /** Recherche-Inhalt (Person/Ort) statt Editor. */
   researchKind: PaneResearchKind | null;
   /** Ausgewähltes Recherche-Item dieses Panes. */
   researchId: string | null;
@@ -197,10 +197,10 @@ interface Store {
   setLayoutMode: (mode: LayoutMode) => Promise<void>;
   /** Schaltet der Reihe nach durch die Layout-Modi (Shortcut). */
   cycleLayout: () => Promise<void>;
-  /** Öffnet Person/Ort/Notiz in einem Pane (id = null → leere Auswahl). */
+  /** Öffnet Person/Ort in einem Pane (id = null → leere Auswahl). */
   openResearchInPane: (paneId: PaneId, kind: PaneResearchKind, id: string | null) => Promise<void>;
   setPaneResearchId: (paneId: PaneId, id: string | null) => void;
-  /** Öffnet Person/Ort/Notiz in einem anderen sichtbaren Pane (Klick auf einen
+  /** Öffnet Person/Ort in einem anderen sichtbaren Pane (Klick auf einen
    *  Planungs-Tag im Text) — teilt notfalls das Layout auf. */
   openResearchNextTo: (
     paneId: PaneId,
@@ -212,7 +212,7 @@ interface Store {
   /** Zähler als Refresh-Signal nach Anlegen/Speichern/Löschen von Recherche-Daten. */
   researchVersion: number;
   touchResearch: () => void;
-  /** Personen/Orte/Notizen für die Tag-Auswahl und die Hover-Vorschau. */
+  /** Personen/Orte für die Tag-Auswahl und die Hover-Vorschau. */
   planIndex: PlanIndex;
   refreshPlanIndex: () => Promise<void>;
   toggleFocusMode: () => void;
@@ -567,7 +567,7 @@ export const useStore = create<Store>((set, get) => {
       try {
         set({ project: await api.restoreTrash(key) });
         get().touchTrash();
-        // Der Eintrag kann eine Person, ein Ort oder eine Notiz gewesen sein.
+        // Der Eintrag kann eine Person oder ein Ort gewesen sein.
         get().touchResearch();
         void get().refreshPlanIndex();
         await get().refreshSceneStats();
@@ -682,7 +682,7 @@ export const useStore = create<Store>((set, get) => {
     },
 
     openResearchInPane: async (paneId, kind, id) => {
-      // Dieselbe Notiz doppelt zu öffnen provoziert Autosave-Konflikte —
+      // Denselben Eintrag doppelt zu öffnen provoziert Autosave-Konflikte —
       // stattdessen den Pane aktivieren, der sie schon zeigt.
       if (id) {
         const open = PANES_FOR_MODE[get().layoutMode].find(
@@ -738,10 +738,9 @@ export const useStore = create<Store>((set, get) => {
         return;
       }
       try {
-        const [characters, locations, notes] = await Promise.all([
+        const [characters, locations] = await Promise.all([
           api.listEntities("characters"),
           api.listEntities("locations"),
-          api.listNotes(),
         ]);
         const fromEntities = (list: typeof characters) =>
           list.map((e) => ({ id: e.id, name: e.name, hasImage: !!e.image }));
@@ -749,7 +748,6 @@ export const useStore = create<Store>((set, get) => {
           planIndex: {
             characters: fromEntities(characters),
             locations: fromEntities(locations),
-            notes: notes.map((n) => ({ id: n.id, name: n.title, hasImage: false })),
           },
         });
       } catch {

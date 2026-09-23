@@ -46,15 +46,10 @@ export interface Entity {
   image?: string | null;
 }
 
-export interface NoteInfo {
-  id: string;
-  title: string;
-}
-
 /** Ein Eintrag im Papierkorb des Projekts. */
 export interface TrashItem {
   key: string;
-  /** "chapter" | "scene" | "note" | "characters" | "locations" */
+  /** "chapter" | "scene" | "characters" | "locations" */
   kind: string;
   id: string;
   title: string;
@@ -104,7 +99,7 @@ export interface Timeline {
 /** Fundstelle eines Planungs-Tags im Text (Rückverlinkung). */
 export interface Mention {
   /** Dokumentart, in der der Tag steht. */
-  source: "scene" | "note" | "character" | "location";
+  source: "scene" | "character" | "location";
   sourceId: string;
   sourceTitle: string;
   /** Das getaggte Wort im Fließtext ("Er", "Seine", "Jonas", …). */
@@ -114,7 +109,7 @@ export interface Mention {
 }
 
 export interface SearchHit {
-  kind: "scene" | "note" | "character" | "location" | "event";
+  kind: "scene" | "character" | "location" | "event";
   id: string;
   title: string;
   snippet: string;

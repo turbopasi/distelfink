@@ -18,7 +18,6 @@ import type { IconName } from "./Icon";
 const KIND_ICON: Record<PlanTagKind, IconName> = {
   person: "user",
   location: "map-pin",
-  note: "notebook-text",
 };
 
 export function EditorContextMenu({ editor, paneId }: { editor: Editor; paneId: PaneId }) {

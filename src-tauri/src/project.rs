@@ -304,10 +304,6 @@ impl OpenProject {
         }
         self.note_mtime(PROJECT_FILE);
         self.note_mtime("timeline.json");
-        self.note_mtime(crate::research::NOTES_INDEX);
-        for note in crate::research::list_note_infos(self) {
-            self.note_mtime(&crate::research::note_rel_path(&note.id));
-        }
     }
 
     pub(crate) fn info(&self) -> ProjectInfo {
@@ -353,7 +349,7 @@ pub fn create_project(
         return Err(format!("Ordner existiert bereits: {}", root.display()));
     }
 
-    for dir in ["manuscript", "notes", "characters", "locations", ".cache"] {
+    for dir in ["manuscript", "characters", "locations", ".cache"] {
         fs::create_dir_all(root.join(dir)).map_err(|e| format!("Ordner anlegen ({dir}): {e}"))?;
     }
     // Vorbereitung für Ebene C (Phase 5): Cache und Papierkorb gehören nicht ins Repo.

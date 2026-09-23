@@ -20,7 +20,6 @@ import {
 } from "./planTagCommand";
 import { removePlanTagAt } from "./PlanTag";
 import { cachedPlanTagAvatar, loadPlanTagAvatar, planTagName } from "./planTagInfo";
-import type { EntityKind } from "../types";
 
 export function PlanTagOverlay({ editor, paneId }: { editor: Editor; paneId: PaneId }) {
   const command = usePlanTagCommand(editor);
@@ -110,17 +109,10 @@ function PlanTagPicker({
   async function createAndChoose() {
     closing.current = true;
     try {
-      if (kind === "note") {
-        const notes = await api.createNote(trimmed);
-        const created = notes[notes.length - 1];
-        touchResearch();
-        if (created) choosePlanTagTarget(editor, created.id, created.title);
-      } else {
-        const research = PLAN_TAG_RESEARCH[kind] as EntityKind;
-        const created = await api.saveEntity(research, { id: "", name: trimmed });
-        touchResearch();
-        choosePlanTagTarget(editor, created.id, created.name);
-      }
+      const research = PLAN_TAG_RESEARCH[kind];
+      const created = await api.saveEntity(research, { id: "", name: trimmed });
+      touchResearch();
+      choosePlanTagTarget(editor, created.id, created.name);
     } catch (e) {
       useStore.setState({ error: String(e) });
       cancelPlanTagCommand(editor);

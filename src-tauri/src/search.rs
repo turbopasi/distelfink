@@ -5,7 +5,6 @@
 //! aufgebaut und gehört weder in Git noch in den Sync.
 
 use crate::project::{scene_rel_path, with_project, AppState, BinderNode};
-use crate::research::{list_note_infos, note_rel_path};
 use rusqlite::Connection;
 use serde::Serialize;
 use std::fs;
@@ -13,7 +12,7 @@ use std::fs;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchHit {
-    /// "scene" | "note" | "character" | "location" | "event"
+    /// "scene" | "character" | "location" | "event"
     pub kind: String,
     pub id: String,
     pub title: String,
@@ -55,14 +54,6 @@ fn rebuild_index(
     for (id, title) in titles {
         let body = fs::read_to_string(p.abs(&scene_rel_path(&id))).unwrap_or_default();
         insert.execute(("scene", &id, &title, &body)).map_err(err)?;
-    }
-
-    // Notizen
-    for note in list_note_infos(p) {
-        let body = fs::read_to_string(p.abs(&note_rel_path(&note.id))).unwrap_or_default();
-        insert
-            .execute(("note", &note.id, &note.title, &body))
-            .map_err(err)?;
     }
 
     // Personen & Orte: Name + Beschreibung + freie Felder

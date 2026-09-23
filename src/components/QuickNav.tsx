@@ -11,7 +11,6 @@ const NO_BINDER: BinderNode[] = [];
 
 const KIND_ICON: Record<SearchHit["kind"], IconName> = {
   scene: "file-text",
-  note: "notebook-text",
   character: "user",
   location: "map-pin",
   event: "clock",
@@ -109,7 +108,6 @@ export function QuickNav() {
     const { kind, id } = item.hit;
     const activePane = useStore.getState().activePane;
     if (kind === "scene") void selectScene(id);
-    else if (kind === "note") void openResearchInPane(activePane, "notes", id);
     else if (kind === "character") void openResearchInPane(activePane, "characters", id);
     else if (kind === "location") void openResearchInPane(activePane, "locations", id);
     else if (kind === "event") void setPaneTimeline(activePane, true);
@@ -120,7 +118,7 @@ export function QuickNav() {
       <div className="quicknav" onClick={(e) => e.stopPropagation()}>
         <input
           ref={inputRef}
-          placeholder="Suchen: Dokumente, Notizen, Personen, Orte, Volltext …"
+          placeholder="Suchen: Dokumente, Personen, Orte, Volltext …"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {

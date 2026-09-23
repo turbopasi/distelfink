@@ -238,7 +238,7 @@ function BackgroundEditor() {
       <p className="muted small">
         Das Bild liegt hinter der Manuskriptseite — je durchsichtiger die Schreibfläche,
         desto mehr davon scheint hinter dem Text durch. Es gilt für alle Dokumente aus dem
-        Binder sowie für Notizen- und Planungsdokumente.
+        Binder sowie für die Planungsdokumente.
       </p>
     </>
   );
@@ -432,7 +432,7 @@ function EditorTab() {
         <span>Rechtschreibprüfung</span>
       </label>
       <p className="muted small">
-        Diese Einstellungen wirken auf den Schreib-Editor und die Notizen — nicht auf den
+        Diese Einstellungen wirken auf den Schreib-Editor und die Planungsdokumente — nicht auf den
         Export (dort gelten die Formatierungsvorlagen).
       </p>
     </>
@@ -492,7 +492,7 @@ function LayoutTab() {
           checked={lay.researchVisible}
           onChange={(e) => patch({ researchVisible: e.target.checked })}
         />
-        <span>Planungsleiste (Personen, Orte, Notizen, Module) anzeigen</span>
+        <span>Planungsleiste (Personen, Orte, Module) anzeigen</span>
       </label>
       <label className="settings-row">
         <span>Planungsleiste-Position</span>

@@ -7,7 +7,6 @@
 import { api } from "../api";
 import { PLAN_TAG_RESEARCH, type PlanTagKind } from "../planTags";
 import type { PlanIndex } from "../store";
-import type { EntityKind } from "../types";
 
 const avatarCache = new Map<string, string | null>();
 
@@ -40,11 +39,10 @@ export async function loadPlanTagAvatar(
   id: string,
   index: PlanIndex,
 ): Promise<string | null> {
-  if (kind === "note") return null;
   const key = cacheKey(kind, id);
   if (avatarCache.has(key)) return avatarCache.get(key) ?? null;
 
-  const research = PLAN_TAG_RESEARCH[kind] as EntityKind;
+  const research = PLAN_TAG_RESEARCH[kind];
   if (!index[research].find((e) => e.id === id)?.hasImage) {
     avatarCache.set(key, null);
     return null;

@@ -3,7 +3,6 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { PANE_IDS, useStore, type PaneResearchKind } from "../store";
 import { RESEARCH_KIND_LABELS } from "./ResearchPane";
-import type { EntityKind } from "../types";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { Icon, type IconName } from "./Icon";
 import { startLocationDrag, startPersonDrag } from "./drag";
@@ -11,13 +10,12 @@ import { startLocationDrag, startPersonDrag } from "./drag";
 const KIND_ICON: Record<PaneResearchKind, IconName> = {
   characters: "user",
   locations: "map-pin",
-  notes: "notebook-text",
 };
 
 type StoreState = ReturnType<typeof useStore.getState>;
 
 /** Planungsmodul: eigenständiges Werkzeug ohne Einträge-Liste (anders als
- *  Personen/Orte/Notizen). Hier kommen künftige Module dazu — Plotstruktur,
+ *  Personen/Orte). Hier kommen künftige Module dazu — Plotstruktur,
  *  Beziehungen, Weltenbau —, jedes zeigt sich im aktiven Bereich. */
 interface PlanningModule {
   id: string;
@@ -41,7 +39,7 @@ const PLANNING_MODULES: PlanningModule[] = [
   },
 ];
 
-/** Zweite Sidebar neben dem Binder: Personen, Orte, Notizen und Planungsmodule. */
+/** Zweite Sidebar neben dem Binder: Personen, Orte und Planungsmodule. */
 export function ResearchSidebar() {
   return (
     <nav className="research-sidebar sidebar">
@@ -50,7 +48,6 @@ export function ResearchSidebar() {
       </div>
       <ResearchGroup kind="characters" />
       <ResearchGroup kind="locations" />
-      <ResearchGroup kind="notes" />
       <ModuleGroup />
     </nav>
   );
@@ -101,13 +98,10 @@ function ResearchGroup({ kind }: { kind: PaneResearchKind }) {
 
   useEffect(() => {
     let alive = true;
-    const load =
-      kind === "notes"
-        ? api.listNotes().then((l) => alive && setItems(l.map((n) => ({ id: n.id, name: n.title }))))
-        : api
-            .listEntities(kind as EntityKind)
-            .then((l) => alive && setItems(l.map((e) => ({ id: e.id, name: e.name }))));
-    void load.catch((e) => useStore.setState({ error: String(e) }));
+    void api
+      .listEntities(kind)
+      .then((l) => alive && setItems(l.map((e) => ({ id: e.id, name: e.name }))))
+      .catch((e) => useStore.setState({ error: String(e) }));
     return () => {
       alive = false;
     };
@@ -117,17 +111,11 @@ function ResearchGroup({ kind }: { kind: PaneResearchKind }) {
 
   async function addItem() {
     try {
-      let createdId: string | null = null;
-      if (kind === "notes") {
-        const list = await api.createNote("Neue Notiz");
-        createdId = list[list.length - 1]?.id ?? null;
-      } else {
-        const created = await api.saveEntity(kind as EntityKind, {
-          id: "",
-          name: `Neue ${labels.singular}`,
-        });
-        createdId = created.id;
-      }
+      const created = await api.saveEntity(kind, {
+        id: "",
+        name: `Neue ${labels.singular}`,
+      });
+      const createdId = created.id;
       touchResearch();
       setCollapsed(false);
       if (createdId) {
@@ -187,8 +175,8 @@ function ResearchItem({ kind, id, name }: { kind: PaneResearchKind; id: string; 
     setEditing(true);
   }
 
-  // Umbenannt wird hier in der Liste — bei Notizen mangels Titelfeld im Detail,
-  // bei Personen und Orten als kurzer Weg neben dem Namensfeld des Eintrags.
+  // Umbenannt wird hier in der Liste — ein kurzer Weg neben dem Namensfeld
+  // des Eintrags.
   function commitRename() {
     setEditing(false);
     const title = draft.trim();
@@ -196,19 +184,15 @@ function ResearchItem({ kind, id, name }: { kind: PaneResearchKind; id: string; 
       setDraft(name);
       return;
     }
-    const renamed: Promise<unknown> =
-      kind === "notes"
-        ? api.renameNote(id, title)
-        : api.updateEntityMeta(kind as EntityKind, id, { name: title });
-    void renamed
+    void api
+      .updateEntityMeta(kind, id, { name: title })
       .then(() => touchResearch())
       .catch((e) => useStore.setState({ error: String(e) }));
   }
 
   function duplicate() {
-    const copied: Promise<unknown> =
-      kind === "notes" ? api.duplicateNote(id) : api.duplicateEntity(kind as EntityKind, id);
-    void copied
+    void api
+      .duplicateEntity(kind, id)
       .then(() => touchResearch())
       .catch((e) => useStore.setState({ error: String(e) }));
   }
@@ -228,8 +212,7 @@ function ResearchItem({ kind, id, name }: { kind: PaneResearchKind; id: string; 
     });
     if (!yes) return;
     try {
-      if (kind === "notes") await api.deleteNote(id);
-      else await api.deleteEntity(kind as EntityKind, id);
+      await api.deleteEntity(kind, id);
       // Panes leeren, die den gelöschten Eintrag zeigen.
       const s = useStore.getState();
       for (const p of PANE_IDS) {

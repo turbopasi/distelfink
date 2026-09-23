@@ -1,11 +1,10 @@
 //! Recherche-Module (Phase 4): Personen-/Orte-Datenbank, Notizen, Zeitstrahl.
 //!
 //! Personen/Orte: eine JSON-Datei pro Eintrag in `characters/` bzw. `locations/`.
-//! Notizen: `notes/<id>.md` + Titel-Index `notes/_index.json`.
 //! Zeitstrahl: `timeline.json` (Reihenfolge = Array-Reihenfolge).
 
 use crate::project::{
-    make_id, mtime_ms, validate_id_pub, with_project, AppState, OpenProject, WriteResult,
+    make_id, mtime_ms, validate_id_pub, with_project, AppState, WriteResult,
 };
 use crate::trash;
 use base64::Engine;
@@ -387,194 +386,6 @@ pub fn get_entity_image(
 }
 
 // ---------------------------------------------------------------------------
-// Notizen
-// ---------------------------------------------------------------------------
-
-pub const NOTES_INDEX: &str = "notes/_index.json";
-
-#[derive(Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct NoteInfo {
-    pub id: String,
-    pub title: String,
-}
-
-pub(crate) fn note_rel_path(id: &str) -> String {
-    format!("notes/{id}.md")
-}
-
-pub(crate) fn list_note_infos(p: &OpenProject) -> Vec<NoteInfo> {
-    fs::read_to_string(p.abs(NOTES_INDEX))
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default()
-}
-
-fn save_note_index(p: &mut OpenProject, notes: &[NoteInfo]) -> Result<(), String> {
-    let json =
-        serde_json::to_string_pretty(notes).map_err(|e| format!("Serialisierung: {e}"))?;
-    fs::create_dir_all(p.abs("notes")).map_err(|e| format!("notes anlegen: {e}"))?;
-    fs::write(p.abs(NOTES_INDEX), json).map_err(|e| format!("{NOTES_INDEX} schreiben: {e}"))?;
-    p.note_mtime(NOTES_INDEX);
-    p.search_dirty = true;
-    Ok(())
-}
-
-#[tauri::command]
-pub fn list_notes(state: tauri::State<AppState>) -> Result<Vec<NoteInfo>, String> {
-    with_project(&state, |p| Ok(list_note_infos(p)))
-}
-
-#[tauri::command]
-pub fn create_note(title: String, state: tauri::State<AppState>) -> Result<Vec<NoteInfo>, String> {
-    with_project(&state, |p| {
-        let id = make_id(&title);
-        fs::create_dir_all(p.abs("notes")).map_err(|e| format!("notes anlegen: {e}"))?;
-        let rel = note_rel_path(&id);
-        fs::write(p.abs(&rel), "").map_err(|e| format!("Notiz anlegen: {e}"))?;
-        p.note_mtime(&rel);
-        let mut notes = list_note_infos(p);
-        notes.push(NoteInfo { id, title });
-        save_note_index(p, &notes)?;
-        Ok(notes)
-    })
-}
-
-#[tauri::command]
-pub fn rename_note(
-    id: String,
-    title: String,
-    state: tauri::State<AppState>,
-) -> Result<Vec<NoteInfo>, String> {
-    with_project(&state, |p| {
-        let mut notes = list_note_infos(p);
-        let note = notes
-            .iter_mut()
-            .find(|n| n.id == id)
-            .ok_or(format!("Notiz nicht gefunden: {id}"))?;
-        note.title = title;
-        save_note_index(p, &notes)?;
-        Ok(notes)
-    })
-}
-
-/// Dupliziert eine Notiz samt Inhalt; die Kopie steht direkt hinter dem Original.
-#[tauri::command]
-pub fn duplicate_note(id: String, state: tauri::State<AppState>) -> Result<Vec<NoteInfo>, String> {
-    validate_id_pub(&id)?;
-    with_project(&state, |p| {
-        let mut notes = list_note_infos(p);
-        let pos = notes
-            .iter()
-            .position(|n| n.id == id)
-            .ok_or(format!("Notiz nicht gefunden: {id}"))?;
-        let title = format!("{} (Kopie)", notes[pos].title);
-        let new_id = make_id(&title);
-        fs::create_dir_all(p.abs("notes")).map_err(|e| format!("notes anlegen: {e}"))?;
-        let rel = note_rel_path(&new_id);
-        let src = p.abs(&note_rel_path(&id));
-        if src.exists() {
-            fs::copy(&src, p.abs(&rel)).map_err(|e| format!("Notiz kopieren: {e}"))?;
-        } else {
-            fs::write(p.abs(&rel), "").map_err(|e| format!("Notiz anlegen: {e}"))?;
-        }
-        p.note_mtime(&rel);
-        notes.insert(pos + 1, NoteInfo { id: new_id, title });
-        save_note_index(p, &notes)?;
-        Ok(notes)
-    })
-}
-
-#[tauri::command]
-pub fn delete_note(id: String, state: tauri::State<AppState>) -> Result<Vec<NoteInfo>, String> {
-    validate_id_pub(&id)?;
-    with_project(&state, |p| {
-        // Titel und Platz stehen nur im Index — vor dem Neuschreiben lesen.
-        let (title, index) = trash::note_title(p, &id).unwrap_or((id.clone(), 0));
-        let mut notes = list_note_infos(p);
-        notes.retain(|n| n.id != id);
-        let mut files = Vec::new();
-        if let Some(f) = trash::move_to_trash(p, &note_rel_path(&id))? {
-            files.push(f);
-        }
-        trash::record(
-            p,
-            trash::TrashItem {
-                key: trash::new_key(),
-                kind: "note".into(),
-                id: id.clone(),
-                title,
-                deleted_at: trash::now_ms(),
-                files,
-                node: None,
-                parent_id: None,
-                index,
-            },
-        )?;
-        save_note_index(p, &notes)?;
-        Ok(notes)
-    })
-}
-
-/// Hängt eine Notiz aus dem Papierkorb wieder in den Titel-Index.
-pub(crate) fn restore_note_entry(
-    p: &mut OpenProject,
-    id: &str,
-    title: &str,
-    index: usize,
-) -> Result<(), String> {
-    let mut notes = list_note_infos(p);
-    let at = index.min(notes.len());
-    notes.insert(
-        at,
-        NoteInfo {
-            id: id.to_string(),
-            title: title.to_string(),
-        },
-    );
-    save_note_index(p, &notes)
-}
-
-#[tauri::command]
-pub fn read_note(id: String, state: tauri::State<AppState>) -> Result<String, String> {
-    validate_id_pub(&id)?;
-    with_project(&state, |p| {
-        let rel = note_rel_path(&id);
-        let content =
-            fs::read_to_string(p.abs(&rel)).map_err(|e| format!("Notiz lesen ({id}): {e}"))?;
-        p.note_mtime(&rel);
-        Ok(content)
-    })
-}
-
-#[tauri::command]
-pub fn write_note(
-    id: String,
-    content: String,
-    force: bool,
-    state: tauri::State<AppState>,
-) -> Result<WriteResult, String> {
-    validate_id_pub(&id)?;
-    with_project(&state, |p| {
-        let rel = note_rel_path(&id);
-        let path = p.abs(&rel);
-        if !force {
-            if let (Some(known), Some(current)) =
-                (p.known_mtimes.get(&rel), mtime_ms(&path))
-            {
-                if current != *known {
-                    return Ok(WriteResult::Conflict);
-                }
-            }
-        }
-        fs::write(&path, &content).map_err(|e| format!("Notiz schreiben ({id}): {e}"))?;
-        p.note_mtime(&rel);
-        p.search_dirty = true;
-        Ok(WriteResult::Ok)
-    })
-}
-
-// ---------------------------------------------------------------------------
 // Dokument-Bilder (inline in Szenen und Recherche-Dokumenten)
 // ---------------------------------------------------------------------------
 
@@ -672,7 +483,7 @@ pub fn read_doc_image(
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Mention {
-    /// "scene" | "note" | "character" | "location"
+    /// "scene" | "character" | "location"
     pub source: String,
     pub source_id: String,
     pub source_title: String,
@@ -691,7 +502,7 @@ struct FoundTag<'a> {
 }
 
 fn is_tag_kind(kind: &str) -> bool {
-    matches!(kind, "person" | "location" | "note")
+    matches!(kind, "person" | "location")
 }
 
 /// Liest einen Planungs-Tag, der an `start` mit '[' beginnt.
@@ -815,13 +626,6 @@ pub fn list_mentions(
                 continue;
             };
             collect_mentions(&text, &tag_kind, &id, "scene", &scene_id, &title, &mut out);
-        }
-
-        for note in list_note_infos(p) {
-            let Ok(text) = fs::read_to_string(p.abs(&note_rel_path(&note.id))) else {
-                continue;
-            };
-            collect_mentions(&text, &tag_kind, &id, "note", &note.id, &note.title, &mut out);
         }
 
         for (source, dir) in [("character", "characters"), ("location", "locations")] {
@@ -1021,7 +825,7 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
     fn kommt_mit_umlauten_klar() {
         let text = "Draußen stand [er](person:jonas-3f2a1b) – müde.";
         let mut out = Vec::new();
-        collect_mentions(text, "person", "jonas-3f2a1b", "note", "n", "Notiz", &mut out);
+        collect_mentions(text, "person", "jonas-3f2a1b", "scene", "s", "Szene", &mut out);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].context, "Draußen stand er – müde.");
     }

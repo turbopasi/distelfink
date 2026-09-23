@@ -11,7 +11,6 @@ import { Icon, type IconName } from "./Icon";
 const KIND_ICON: Record<string, IconName> = {
   chapter: "folder",
   scene: "file-text",
-  note: "notebook-text",
   characters: "user",
   locations: "map-pin",
 };
@@ -19,7 +18,6 @@ const KIND_ICON: Record<string, IconName> = {
 const KIND_LABEL: Record<string, string> = {
   chapter: "Ordner",
   scene: "Dokument",
-  note: "Notiz",
   characters: "Person",
   locations: "Ort",
 };
@@ -98,7 +96,7 @@ export function TrashPanel() {
 
       {items.length === 0 ? (
         <p className="muted">
-          Der Papierkorb ist leer. Gelöschte Ordner, Dokumente, Personen, Orte und Notizen
+          Der Papierkorb ist leer. Gelöschte Ordner, Dokumente, Personen und Orte
           landen hier, bis sie endgültig gelöscht werden.
         </p>
       ) : (

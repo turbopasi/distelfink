@@ -60,7 +60,7 @@ export interface LayoutSettings {
   /** Binder-Breite in px (auch per Drag am Trennsteg verstellbar). */
   binderWidth: number;
   binderPosition: "left" | "right";
-  /** Planungsleiste (Personen/Orte/Notizen/Module) — zweite Sidebar neben dem
+  /** Planungsleiste (Personen/Orte/Module) — zweite Sidebar neben dem
    *  Binder. Schlüssel heißen weiter research*, damit gespeicherte
    *  Einstellungen bestehender Projekte gültig bleiben. */
   researchVisible: boolean;

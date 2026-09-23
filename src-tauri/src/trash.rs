@@ -11,7 +11,6 @@
 use crate::project::{
     restore_binder_node, with_project, AppState, BinderNode, OpenProject, ProjectInfo,
 };
-use crate::research::{list_note_infos, restore_note_entry};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -35,7 +34,7 @@ pub struct TrashItem {
     /// Schlüssel im Papierkorb (IDs allein reichen nicht: dieselbe ID kann
     /// gelöscht, neu angelegt und wieder gelöscht worden sein).
     pub key: String,
-    /// "chapter" | "scene" | "note" | "characters" | "locations"
+    /// "chapter" | "scene" | "characters" | "locations"
     pub kind: String,
     /// ID des Eintrags — bei Binder-Knoten die des Wurzelknotens.
     pub id: String,
@@ -170,12 +169,14 @@ pub fn restore_trash(key: String, state: tauri::State<AppState>) -> Result<Proje
                     .ok_or("Eintrag ohne Knotendaten — kann nicht zurück".to_string())?;
                 restore_binder_node(p, node, item.parent_id.as_deref(), item.index)?;
             }
-            "note" => {
-                restore_note_entry(p, &item.id, &item.title, item.index)?;
-            }
             "characters" | "locations" => {
                 // Die JSON-Datei ist der Eintrag; sie liegt wieder an Ort und Stelle.
             }
+            // Notizen kennt Distelfink nicht mehr. Alte Papierkorb-Einträge
+            // gibt es in Projekten von früher aber noch: die Markdown-Datei
+            // wandert zurück nach notes/, wo sie lesbar liegen bleibt — nur
+            // öffnen kann die App sie nicht mehr.
+            "note" => {}
             other => return Err(format!("Unbekannte Art im Papierkorb: {other}")),
         }
 
@@ -229,12 +230,3 @@ pub fn count_trash(state: tauri::State<AppState>) -> Result<usize, String> {
     with_project(&state, |p| Ok(load_index(p).len()))
 }
 
-/// Titel und Platz einer Notiz — beim Löschen zu lesen, bevor beides mit dem
-/// neu geschriebenen Index verschwindet.
-pub(crate) fn note_title(p: &OpenProject, id: &str) -> Option<(String, usize)> {
-    let notes = list_note_infos(p);
-    notes
-        .iter()
-        .position(|n| n.id == id)
-        .map(|i| (notes[i].title.clone(), i))
-}

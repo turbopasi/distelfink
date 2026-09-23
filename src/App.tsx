@@ -198,7 +198,7 @@ function MainView() {
           </button>
           <button
             className={researchVisible ? "on" : ""}
-            title="Planungsleiste (Personen, Orte, Notizen, Module) ein-/ausblenden"
+            title="Planungsleiste (Personen, Orte, Module) ein-/ausblenden"
             onClick={toggleResearch}
           >
             <Icon name="notebook-pen" />

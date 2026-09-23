@@ -1,6 +1,6 @@
 // Rückrichtung der Planungs-Tags: "wo im Text komme ich vor?"
 //
-// Sitzt unter dem Dokument einer Person / eines Orts / einer Notiz und zeigt
+// Sitzt unter dem Dokument einer Person oder eines Orts und zeigt
 // jede Fundstelle mit dem getaggten Wort und dem umgebenden Satz.
 
 import { useCallback, useEffect, useState } from "react";
@@ -12,7 +12,6 @@ import { Icon } from "./Icon";
 
 const SOURCE_ICON: Record<Mention["source"], string> = {
   scene: "📄",
-  note: "🗒",
   character: "👤",
   location: "📍",
 };
@@ -50,8 +49,6 @@ export function MentionsBar({
   function goTo(mention: Mention) {
     if (mention.source === "scene") {
       void openSceneNextTo(paneId, mention.sourceId);
-    } else if (mention.source === "note") {
-      void openResearchNextTo(paneId, "notes", mention.sourceId);
     } else {
       void openResearchNextTo(
         paneId,

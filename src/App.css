@@ -1598,7 +1598,7 @@ li.chapter > .binder-row > .binder-title {
 }
 
 /* --------------------------------------------------------------------------
-   Planungs-Tags (Personen, Orte, Notizen im Fließtext)
+   Planungs-Tags (Personen und Orte im Fließtext)
    -------------------------------------------------------------------------- */
 
 .plan-tag[data-plan-tag="person"] {
@@ -1857,7 +1857,7 @@ li.chapter > .binder-row > .binder-title {
 }
 
 /* --------------------------------------------------------------------------
-   Planungsdokumente (Personen/Orte/Notizen als freie Dokumente)
+   Planungsdokumente (Personen und Orte als freie Dokumente)
    -------------------------------------------------------------------------- */
 
 .entity-doc {

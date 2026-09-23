@@ -48,7 +48,7 @@ export function docExtensions() {
     Markdown.configure({ html: true }),
     MarkdownTextAlign.configure({ types: ["heading", "paragraph"] }),
     DocImage,
-    // Planungs-Tags (/person, /location, /note) samt Slash-Kommando.
+    // Planungs-Tags (/person, /location) samt Slash-Kommando.
     PlanTag,
     PlanTagCommand,
   ];
@@ -111,7 +111,7 @@ function EditorInstance({
   const setContent = useStore((s) => s.setContent);
 
   const editor = useEditor({
-    // SceneBreak nur hier: eigenständige Dokumente (Notizen, Personen) kennen
+    // SceneBreak nur hier: eigenständige Dokumente (Personen, Orte) kennen
     // keine Szenengrenzen.
     extensions: [...docExtensions(), SceneBreak],
     editorProps: { handlePaste: imagePasteHandler },
