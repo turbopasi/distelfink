@@ -68,6 +68,9 @@ export interface Pane {
   /** Zeigt den Zeitstrahl über dem sonstigen Inhalt dieses Panes.
    *  Bewusst kein Ersatz für sceneId/corkboardId: Ausschalten kehrt zurück. */
   timeline: boolean;
+  /** Zeigt ein Mindboard über dem sonstigen Inhalt — wie der Zeitstrahl eine
+   *  Auflage; beide schließen sich gegenseitig aus. */
+  mindboardId: string | null;
   /** Zeigt den Papierkorb — wie der Zeitstrahl eine Auflage, kein Ersatz. */
   trash: boolean;
   /** Markdown — aktuellster Stand aus dem Editor. */
@@ -76,6 +79,11 @@ export interface Pane {
   /** Erhöht sich, wenn Inhalt von außen neu geladen wurde → Editor remountet. */
   loadCounter: number;
 }
+
+/** Ansichten mit eigenem, verzögertem Speichern (Mindboards) melden sich
+ *  hier an, damit `flushAll` vor Schließen und Sicherungspunkten auch ihre
+ *  offenen Änderungen schreibt. */
+export const extraFlushers = new Set<() => Promise<void>>();
 
 const AUTOSAVE_MS = 2000;
 const RECENTS_KEY = "distelfink.recents";
@@ -92,6 +100,7 @@ const emptyPane = (): Pane => ({
   researchKind: null,
   researchId: null,
   timeline: false,
+  mindboardId: null,
   trash: false,
   content: "",
   saveState: "saved",
@@ -181,6 +190,11 @@ interface Store {
   setQuickNavOpen: (open: boolean) => void;
   /** Blendet den Zeitstrahl in einem Pane ein/aus (Inhalt darunter bleibt erhalten). */
   setPaneTimeline: (paneId: PaneId, on: boolean) => Promise<void>;
+  /** Blendet ein Mindboard in einem Pane ein (id) oder aus (null). */
+  setPaneMindboard: (paneId: PaneId, id: string | null) => Promise<void>;
+  /** Zähler als Refresh-Signal für die Mindboard-Liste. */
+  mindboardVersion: number;
+  touchMindboards: () => void;
   /** Ebenso für den Papierkorb. */
   setPaneTrash: (paneId: PaneId, on: boolean) => Promise<void>;
   /** Zähler als Refresh-Signal für den offenen Papierkorb. */
@@ -298,6 +312,7 @@ export const useStore = create<Store>((set, get) => {
       researchKind: null,
       researchId: null,
       timeline: false,
+      mindboardId: null,
       trash: false,
       saveState: "saved" as SaveState,
       loadCounter: pane.loadCounter + 1,
@@ -480,7 +495,9 @@ export const useStore = create<Store>((set, get) => {
       if (shown && !pane.corkboardId && !pane.researchKind && !pane.trash) {
         // Schon offen: nur einen darüberliegenden Zeitstrahl wegblenden und im
         // Fluss zur gewählten Szene springen (kein Neuladen, kein Undo-Verlust).
-        if (pane.timeline) patchPane(paneId, { timeline: false });
+        if (pane.timeline || pane.mindboardId) {
+          patchPane(paneId, { timeline: false, mindboardId: null });
+        }
         if (pane.flowIds.length) {
           patchPane(paneId, { sceneId: id, focusCounter: pane.focusCounter + 1 });
         }
@@ -493,7 +510,8 @@ export const useStore = create<Store>((set, get) => {
     selectChapter: async (id) => {
       const paneId = get().activePane;
       if (get().panes[paneId].corkboardId === id && !get().panes[paneId].trash) {
-        if (get().panes[paneId].timeline) patchPane(paneId, { timeline: false });
+        if (get().panes[paneId].timeline || get().panes[paneId].mindboardId)
+          patchPane(paneId, { timeline: false, mindboardId: null });
         return;
       }
       await get().flushPane(paneId);
@@ -505,6 +523,7 @@ export const useStore = create<Store>((set, get) => {
         researchKind: null,
         researchId: null,
         timeline: false,
+        mindboardId: null,
         trash: false,
         content: "",
         saveState: "saved",
@@ -538,9 +557,33 @@ export const useStore = create<Store>((set, get) => {
       }
       // Beim Verdecken des Editors offene Änderungen sichern.
       if (on) await get().flushPane(paneId);
-      patchPane(paneId, { timeline: on });
+      patchPane(paneId, on ? { timeline: true, mindboardId: null } : { timeline: false });
       set({ activePane: paneId });
     },
+
+    setPaneMindboard: async (paneId, id) => {
+      if (get().panes[paneId].mindboardId === id) {
+        set({ activePane: paneId });
+        return;
+      }
+      // Wie beim Zeitstrahl: zweimal offen würden beide Panes unabhängig
+      // speichern und sich überschreiben — stattdessen den offenen aktivieren.
+      if (id) {
+        const open = PANES_FOR_MODE[get().layoutMode].find(
+          (p) => get().panes[p].mindboardId === id,
+        );
+        if (open) {
+          set({ activePane: open });
+          return;
+        }
+        await get().flushPane(paneId);
+      }
+      patchPane(paneId, id ? { mindboardId: id, timeline: false } : { mindboardId: null });
+      set({ activePane: paneId });
+    },
+
+    mindboardVersion: 0,
+    touchMindboards: () => set((s) => ({ mindboardVersion: s.mindboardVersion + 1 })),
 
     setPaneTrash: async (paneId, on) => {
       if (get().panes[paneId].trash === on) {
@@ -609,6 +652,7 @@ export const useStore = create<Store>((set, get) => {
 
     flushAll: async () => {
       for (const paneId of PANE_IDS) await get().flushPane(paneId);
+      for (const flush of [...extraFlushers]) await flush();
     },
 
     resolveConflict: async (paneId, action) => {
@@ -689,7 +733,8 @@ export const useStore = create<Store>((set, get) => {
           (p) => get().panes[p].researchKind === kind && get().panes[p].researchId === id,
         );
         if (open) {
-          if (get().panes[open].timeline) patchPane(open, { timeline: false });
+          if (get().panes[open].timeline || get().panes[open].mindboardId)
+            patchPane(open, { timeline: false, mindboardId: null });
           set({ activePane: open });
           return;
         }
@@ -703,6 +748,7 @@ export const useStore = create<Store>((set, get) => {
         researchKind: kind,
         researchId: id,
         timeline: false,
+        mindboardId: null,
         trash: false,
         content: "",
         saveState: "saved",

@@ -49,6 +49,7 @@ export function ResearchSidebar() {
       <ResearchGroup kind="characters" />
       <ResearchGroup kind="locations" />
       <ModuleGroup />
+      <MindboardGroup />
     </nav>
   );
 }
@@ -258,6 +259,165 @@ function ResearchItem({ kind, id, name }: { kind: PaneResearchKind; id: string; 
         <>
           <span className="item-name">
             <Icon name={KIND_ICON[kind]} size={14} />
+            {name}
+          </span>
+          <button
+            className="row-delete"
+            title="Löschen"
+            onClick={(e) => {
+              e.stopPropagation();
+              void confirmDelete();
+            }}
+          >
+            <Icon name="trash-2" size={14} />
+          </button>
+        </>
+      )}
+      {menu && <ContextMenu {...menu} onClose={closeMenu} />}
+    </li>
+  );
+}
+
+/** Mindboards: freie Brainstorming-Flächen, beliebig viele pro Projekt. */
+function MindboardGroup() {
+  const version = useStore((s) => s.mindboardVersion);
+  const projectRoot = useStore((s) => s.project?.root);
+  const [items, setItems] = useState<{ id: string; name: string }[]>([]);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void api
+      .listMindboards()
+      .then((l) => alive && setItems(l))
+      .catch((e) => useStore.setState({ error: String(e) }));
+    return () => {
+      alive = false;
+    };
+  }, [version, projectRoot]);
+
+  async function addBoard() {
+    try {
+      const created = await api.createMindboard("Neues Mindboard");
+      const s = useStore.getState();
+      s.touchMindboards();
+      setCollapsed(false);
+      void s.setPaneMindboard(s.activePane, created.id);
+    } catch (e) {
+      useStore.setState({ error: String(e) });
+    }
+  }
+
+  return (
+    <div className="research-group">
+      <div className="research-group-header" onClick={() => setCollapsed(!collapsed)}>
+        <span className="disclosure">
+          <Icon name={collapsed ? "chevron-right" : "chevron-down"} size={12} />
+        </span>
+        <span>Mindboards</span>
+        <button
+          title="Neues Mindboard anlegen"
+          onClick={(e) => {
+            e.stopPropagation();
+            void addBoard();
+          }}
+        >
+          +
+        </button>
+      </div>
+      {!collapsed && (
+        <ul className="research-group-list">
+          {items.length === 0 && <li className="muted small empty">Keine Mindboards</li>}
+          {items.map((it) => (
+            <MindboardItem key={it.id} id={it.id} name={it.name} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function MindboardItem({ id, name }: { id: string; name: string }) {
+  const isOpen = useStore((s) => PANE_IDS.some((p) => s.panes[p].mindboardId === id));
+  const touchMindboards = useStore((s) => s.touchMindboards);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu();
+
+  const open = () => {
+    const s = useStore.getState();
+    void s.setPaneMindboard(s.activePane, id);
+  };
+
+  function startRename() {
+    setDraft(name);
+    setEditing(true);
+  }
+
+  function commitRename() {
+    setEditing(false);
+    const title = draft.trim();
+    if (!title || title === name) {
+      setDraft(name);
+      return;
+    }
+    void api
+      .renameMindboard(id, title)
+      .then(() => touchMindboards())
+      .catch((e) => useStore.setState({ error: String(e) }));
+  }
+
+  async function confirmDelete() {
+    const yes = await ask(`Mindboard "${name}" endgültig löschen?`, {
+      title: "Löschen",
+      kind: "warning",
+    });
+    if (!yes) return;
+    try {
+      // Erst schließen, damit das Board beim Aushängen nicht neu gespeichert wird.
+      const s = useStore.getState();
+      for (const p of PANE_IDS) {
+        if (s.panes[p].mindboardId === id) await s.setPaneMindboard(p, null);
+      }
+      await api.deleteMindboard(id);
+      touchMindboards();
+    } catch (e) {
+      useStore.setState({ error: String(e) });
+    }
+  }
+
+  const menuItems = (): ContextMenuItem[] => [
+    { label: "Umbenennen", icon: "pencil", onSelect: startRename },
+    { kind: "separator" },
+    { label: "Löschen", icon: "trash-2", danger: true, onSelect: () => void confirmDelete() },
+  ];
+
+  return (
+    <li
+      className={`${isOpen ? "open" : ""} ${menu ? "menu-open" : ""}`}
+      onClick={open}
+      onDoubleClick={startRename}
+      onContextMenu={(e) => !editing && openMenu(e, menuItems())}
+    >
+      {editing ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitRename();
+            if (e.key === "Escape") {
+              setDraft(name);
+              setEditing(false);
+            }
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <>
+          <span className="item-name">
+            <Icon name="workflow" size={14} />
             {name}
           </span>
           <button

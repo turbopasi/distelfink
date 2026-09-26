@@ -5,6 +5,8 @@ import type {
   ExportFormat,
   ExportTemplate,
   Mention,
+  Mindboard,
+  MindboardInfo,
   NodeKind,
   ProjectInfo,
   SearchHit,
@@ -90,6 +92,17 @@ export const api = {
   loadTimeline: () => invoke<Timeline>("load_timeline"),
   saveTimeline: (timeline: Timeline) =>
     invoke<Timeline>("save_timeline", { timeline }),
+
+  listMindboards: () => invoke<MindboardInfo[]>("list_mindboards"),
+  createMindboard: (name: string) => invoke<MindboardInfo>("create_mindboard", { name }),
+  loadMindboard: (id: string) => invoke<Mindboard>("load_mindboard", { id }),
+  saveMindboard: (board: Mindboard) => invoke<Mindboard>("save_mindboard", { board }),
+  renameMindboard: (id: string, name: string) =>
+    invoke<void>("rename_mindboard", { id, name }),
+  deleteMindboard: (id: string) => invoke<void>("delete_mindboard", { id }),
+  /** Schreibt einen PNG-Export (base64) an einen frei gewählten Ort. */
+  writeMindboardPng: (path: string, dataBase64: string) =>
+    invoke<void>("write_mindboard_png", { path, dataBase64 }),
 
   searchProject: (query: string) => invoke<SearchHit[]>("search_project", { query }),
 

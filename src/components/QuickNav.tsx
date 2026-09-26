@@ -14,6 +14,7 @@ const KIND_ICON: Record<SearchHit["kind"], IconName> = {
   character: "user",
   location: "map-pin",
   event: "clock",
+  mindboard: "workflow",
 };
 
 type Item =
@@ -28,6 +29,7 @@ export function QuickNav() {
   const selectChapter = useStore((s) => s.selectChapter);
   const openResearchInPane = useStore((s) => s.openResearchInPane);
   const setPaneTimeline = useStore((s) => s.setPaneTimeline);
+  const setPaneMindboard = useStore((s) => s.setPaneMindboard);
 
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
@@ -111,6 +113,7 @@ export function QuickNav() {
     else if (kind === "character") void openResearchInPane(activePane, "characters", id);
     else if (kind === "location") void openResearchInPane(activePane, "locations", id);
     else if (kind === "event") void setPaneTimeline(activePane, true);
+    else if (kind === "mindboard") void setPaneMindboard(activePane, id);
   }
 
   return (

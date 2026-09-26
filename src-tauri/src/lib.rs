@@ -1,4 +1,5 @@
 mod export;
+mod mindboard;
 mod project;
 mod research;
 mod search;
@@ -50,6 +51,13 @@ pub fn run() {
             research::list_mentions,
             research::load_timeline,
             research::save_timeline,
+            mindboard::list_mindboards,
+            mindboard::create_mindboard,
+            mindboard::load_mindboard,
+            mindboard::save_mindboard,
+            mindboard::rename_mindboard,
+            mindboard::delete_mindboard,
+            mindboard::write_mindboard_png,
             search::search_project,
             versioning::snapshot,
             versioning::list_history,

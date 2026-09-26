@@ -96,6 +96,73 @@ export interface Timeline {
   orientation?: TimelineOrientation | "";
 }
 
+/** Art einer Mindboard-Notiz: freier Text, Bild oder Verweis. */
+export type MindNodeKind = "text" | "image" | "person" | "location" | "scene";
+export type MindBorder = "none" | "line" | "rounded" | "cloud";
+export type MindArrow = "none" | "end" | "both";
+
+/** Eine Notiz auf dem Mindboard. x/y ist die linke obere Ecke. */
+export interface MindNode {
+  id: string;
+  kind: MindNodeKind;
+  x: number;
+  y: number;
+  /** Umbruchbreite (Text) bzw. Bildbreite; 0/fehlt = automatisch. */
+  w?: number;
+  text?: string;
+  /** Projektrelativer Bildpfad ("images/…"). */
+  image?: string;
+  /** Person, Ort oder Szene, auf die die Notiz verweist. */
+  refId?: string;
+  /** Wert aus COLOR_PRESETS, "" = Standard. */
+  color?: string;
+  border?: MindBorder | "";
+  fontSize?: number;
+  bold?: boolean;
+}
+
+/** Verbindung zweier Notizen; ein Paar trägt höchstens eine. */
+export interface MindEdge {
+  id: string;
+  from: string;
+  to: string;
+  arrow?: MindArrow | "";
+  label?: string;
+}
+
+/** Hintergrundform zum Gruppieren; magnetisch nimmt sie ihre Notizen mit. */
+export interface MindShape {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  title?: string;
+  color?: string;
+  magnetic?: boolean;
+}
+
+export interface MindView {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+/** Ein ganzes Mindboard, so wie es in mindboards/<id>.json steht. */
+export interface Mindboard {
+  id: string;
+  name: string;
+  nodes: MindNode[];
+  edges: MindEdge[];
+  shapes: MindShape[];
+  view?: MindView | null;
+}
+
+export interface MindboardInfo {
+  id: string;
+  name: string;
+}
+
 /** Fundstelle eines Planungs-Tags im Text (Rückverlinkung). */
 export interface Mention {
   /** Dokumentart, in der der Tag steht. */
@@ -109,7 +176,7 @@ export interface Mention {
 }
 
 export interface SearchHit {
-  kind: "scene" | "character" | "location" | "event";
+  kind: "scene" | "character" | "location" | "event" | "mindboard";
   id: string;
   title: string;
   snippet: string;

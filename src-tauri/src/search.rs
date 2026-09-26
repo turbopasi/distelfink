@@ -109,6 +109,14 @@ fn rebuild_index(
         }
     }
 
+    // Mindboards: Name als Titel, Notiztexte als Inhalt
+    for board in crate::mindboard::read_all(p) {
+        let body = crate::mindboard::search_body(&board);
+        insert
+            .execute(("mindboard", &board.id, &board.name, &body))
+            .map_err(err)?;
+    }
+
     Ok(())
 }
 

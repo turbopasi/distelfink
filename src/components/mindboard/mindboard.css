@@ -1,0 +1,383 @@
+/* --------------------------------------------------------------------------
+   Mindboard: freie Fläche mit Notizen, Linien und Hintergrundformen. Alle
+   Farben kommen aus den Theme-Variablen; eine Notizfarbe setzt nur
+   --mb-color, der Rest leitet sich daraus ab.
+   -------------------------------------------------------------------------- */
+
+.mindboard {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mb-loading {
+  padding: var(--space-8);
+}
+
+.mb-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.mb-toolbar h2 {
+  margin: 0;
+  font: var(--type-title);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mb-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.mb-toolbar-actions button {
+  min-height: 26px;
+  padding: 0 var(--space-4);
+}
+
+.mb-zoom {
+  min-width: 56px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.mb-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0 var(--space-3);
+  background: var(--border-hairline);
+}
+
+/* Die Fläche: dezentes Punktraster, das mit der Ansicht mitwandert. */
+.mb-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  outline: none;
+  cursor: default;
+  background-color: var(--surface-app);
+  background-image: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--text) 16%, transparent) 1px,
+    transparent 1.2px
+  );
+  touch-action: none;
+  user-select: none;
+}
+
+.mb-viewport.panning,
+.mb-viewport.panning * {
+  cursor: grab !important;
+}
+
+.mb-viewport.drop-over {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.mb-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-8);
+  line-height: var(--leading-normal);
+  pointer-events: none;
+}
+
+.mb-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+
+/* ---- Notizen ---- */
+
+.mb-note {
+  --mb-color: var(--text-muted);
+  position: absolute;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 260px;
+  padding: 6px 10px;
+  border: 1.25px solid transparent;
+  border-radius: 2px;
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: 1.35;
+  cursor: default;
+}
+
+.mb-note[style*="width"] {
+  max-width: none;
+}
+
+.mb-note.mb-image {
+  max-width: none;
+  padding: 0;
+  line-height: 0;
+}
+
+.mb-note.mb-colored {
+  color: color-mix(in srgb, var(--mb-color) 70%, var(--text));
+  background: color-mix(in srgb, var(--mb-color) 14%, var(--surface-card));
+}
+
+.mb-note.mb-border-line,
+.mb-note.mb-border-rounded,
+.mb-note.mb-border-cloud {
+  border-color: var(--border-strong);
+  background: var(--surface-card);
+}
+
+.mb-note.mb-colored.mb-border-line,
+.mb-note.mb-colored.mb-border-rounded,
+.mb-note.mb-colored.mb-border-cloud {
+  border-color: var(--mb-color);
+  background: color-mix(in srgb, var(--mb-color) 14%, var(--surface-card));
+}
+
+.mb-note.mb-border-rounded {
+  border-radius: 8px;
+}
+
+.mb-note.mb-border-cloud {
+  border-radius: 999px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.mb-note:hover {
+  box-shadow: 0 0 0 1px var(--border-hairline);
+}
+
+.mb-note.selected {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.mb-note.drop-target {
+  box-shadow: 0 0 0 3px var(--accent);
+  background: var(--accent-soft);
+}
+
+.mb-note.editing {
+  box-shadow: 0 0 0 2px var(--accent);
+  background: var(--surface-card);
+  cursor: text;
+}
+
+.mb-text-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mb-editor {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 140px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  user-select: text;
+}
+
+.mb-note img {
+  display: block;
+  height: auto;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.mb-image-missing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  line-height: 1.3;
+  border: 1px dashed var(--border-strong);
+}
+
+.mb-ref {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  white-space: nowrap;
+}
+
+.mb-note.mb-person,
+.mb-note.mb-location,
+.mb-note.mb-scene {
+  border-color: var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-card);
+  padding: 4px 12px 4px 4px;
+}
+
+.mb-ref-avatar,
+.mb-ref-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+
+.mb-ref-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+
+.mb-resize {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--accent);
+  border: 1.5px solid var(--surface-app);
+  cursor: nwse-resize;
+  pointer-events: auto;
+}
+
+/* ---- Verbindungen ---- */
+
+.mb-edges {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.mb-edge line {
+  stroke: var(--text-muted);
+  stroke-width: 1.25;
+}
+
+.mb-edge.selected line:not(.mb-edge-hit) {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.mb-edges line.mb-edge-hit {
+  stroke: transparent;
+  stroke-width: 10;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.mb-arrow {
+  fill: var(--text-muted);
+}
+
+.mb-arrow-sel {
+  fill: var(--accent);
+}
+
+.mb-label,
+.mb-label-editor {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-app);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.mb-label {
+  cursor: pointer;
+}
+
+.mb-label.selected {
+  color: var(--accent);
+}
+
+.mb-label-editor {
+  width: 140px;
+  border: 1px solid var(--accent);
+  outline: none;
+  color: var(--text);
+  user-select: text;
+}
+
+/* ---- Hintergrundformen: nur der Kopf nimmt Klicks an, damit sich in der
+   Form weiter Notizen anlegen und Rahmen aufziehen lassen. ---- */
+
+.mb-shape {
+  --mb-color: var(--border-strong);
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--mb-color) 60%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mb-color) 10%, transparent);
+  pointer-events: none;
+}
+
+.mb-shape.selected {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.mb-shape-head {
+  height: 30px;
+  padding: 6px 10px 0;
+  box-sizing: border-box;
+  cursor: move;
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.mb-shape-title {
+  display: block;
+  font-size: calc(var(--text-md) - 1px);
+  font-weight: var(--weight-semibold);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mb-shape.mb-colored .mb-shape-title {
+  color: color-mix(in srgb, var(--mb-color) 80%, var(--text));
+}
+
+.mb-shape-title-input {
+  width: 100%;
+  font-weight: var(--weight-semibold);
+  user-select: text;
+}
+
+.mb-box {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  pointer-events: none;
+}

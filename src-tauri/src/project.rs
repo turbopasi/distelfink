@@ -304,6 +304,9 @@ impl OpenProject {
         }
         self.note_mtime(PROJECT_FILE);
         self.note_mtime("timeline.json");
+        for id in crate::mindboard::board_ids(&self.root) {
+            self.note_mtime(&format!("{}/{id}.json", crate::mindboard::DIR));
+        }
     }
 
     pub(crate) fn info(&self) -> ProjectInfo {
