@@ -10,6 +10,30 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.13.0 — 2026-09-26
+
+### Neu
+
+- **Mindboards.** Ein neues Planungsmodul für freies Brainstorming: Notizen
+  liegen ohne feste Ordnung auf einer unendlichen Fläche. Ein Doppelklick legt
+  eine Notiz an, Strg+Enter gleich die nächste darunter. Wer eine Notiz auf
+  eine andere zieht, verbindet beide — mit gedrückter Umschalttaste als Pfeil;
+  dasselbe noch einmal löst die Verbindung wieder. Linien lassen sich
+  beschriften, Notizen einfärben, umrahmen und in Schriftgröße und Stärke
+  ändern.
+- Pro Projekt beliebig viele Boards, angelegt, umbenannt und gelöscht über die
+  neue Gruppe „Mindboards" in der Planungsleiste. Ihr Text ist über die
+  Schnellsuche zu finden.
+- **Bilder auf dem Board.** Bilddateien aus dem Explorer einfach auf das Board
+  ziehen oder ein Bild aus der Zwischenablage mit Strg+V einfügen — etwa einen
+  Bildschirmausschnitt. Bilder lassen sich an der Ecke in der Größe ändern.
+- **Personen, Orte und Szenen** aus den Seitenleisten auf das Board ziehen; ein
+  Doppelklick öffnet sie nebenan.
+- **Hintergrundformen** fassen zusammengehörige Notizen ein und nehmen sie beim
+  Verschieben mit. Dazu Rahmenauswahl, Ausrichten und Stapeln, Kopieren und
+  Einfügen, Rückgängig/Wiederholen, Zoom mit Strg+Mausrad und Export als
+  PNG-Bild in den Farben des aktuellen Themes.
+
 ## 0.12.0 — 2026-09-24
 
 ### Neu
