@@ -86,14 +86,35 @@ fn commit_all(repo: &Repository, author: &str, message: &str) -> Result<bool, St
 /// Beim Anlegen/Öffnen eines Projekts: Repo sicherstellen, `.gitignore`
 /// nachziehen (ältere Projekte) und den aktuellen Stand als Basis committen.
 pub(crate) fn ensure_repo(root: &Path, author: &str, message: &str) -> Result<(), String> {
-    let gitignore = root.join(".gitignore");
-    if !gitignore.exists() {
-        fs::write(&gitignore, ".cache/\n.trash/\n")
-            .map_err(|e| format!(".gitignore schreiben: {e}"))?;
-    }
+    ensure_gitignore(root)?;
     let repo = open_or_init(root)?;
     commit_all(&repo, author, message)?;
     Ok(())
+}
+
+/// Einträge, die jede Projekt-`.gitignore` haben muss: Cache und Papierkorb
+/// gehören nicht in den Verlauf, liegengebliebene Zwischendateien vom
+/// Speichern (`fsutil::write_atomic`) auch nicht.
+fn ensure_gitignore(root: &Path) -> Result<(), String> {
+    let path = root.join(".gitignore");
+    let current = fs::read_to_string(&path).unwrap_or_default();
+    let tmp_pattern = format!("*{}", crate::fsutil::TMP_SUFFIX);
+    let missing: Vec<&str> = [".cache/", ".trash/", tmp_pattern.as_str()]
+        .into_iter()
+        .filter(|entry| !current.lines().any(|l| l.trim() == *entry))
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    let mut next = current;
+    if !next.is_empty() && !next.ends_with('\n') {
+        next.push('\n');
+    }
+    for entry in missing {
+        next.push_str(entry);
+        next.push('\n');
+    }
+    fs::write(&path, next).map_err(|e| format!(".gitignore schreiben: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -225,7 +246,7 @@ pub fn restore_version(
         commit_all(&repo, &author, "Sicherungspunkt vor Wiederherstellung")?;
 
         let content = version_content(&repo, &commit_id, &rel)?;
-        fs::write(p.abs(&rel), &content)
+        crate::fsutil::write_atomic(&p.abs(&rel), &content)
             .map_err(|e| format!("Wiederherstellen ({rel}): {e}"))?;
         p.note_mtime(&rel);
         p.search_dirty = true;

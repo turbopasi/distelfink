@@ -117,6 +117,14 @@ const autosaveTimers: Record<PaneId, ReturnType<typeof setTimeout> | null> = {
   rightBottom: null,
 };
 
+/** Laufender Schreibvorgang je Bereich — `flushPane` wartet ihn ab. */
+const savesInFlight: Record<PaneId, Promise<void> | null> = {
+  leftTop: null,
+  leftBottom: null,
+  rightTop: null,
+  rightBottom: null,
+};
+
 let settingsPersistTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function loadRecents(): string[] {
@@ -205,6 +213,10 @@ interface Store {
   setContent: (paneId: PaneId, content: string) => void;
   flushPane: (paneId: PaneId) => Promise<void>;
   flushAll: () => Promise<void>;
+  /** Alles Offene sichern, bevor die App endet (Fenster schließen, Update):
+   *  Texte, Mindboards, Dokumente, Einstellungen und ein Sicherungspunkt.
+   *  `reason` landet in der Beschreibung des Sicherungspunkts. */
+  flushForExit: (reason: string) => Promise<void>;
   resolveConflict: (paneId: PaneId, action: "overwrite" | "reload") => Promise<void>;
   setActivePane: (paneId: PaneId) => void;
   /** Wechselt das Split-Layout; schließende Panes werden vorher gespeichert. */
@@ -343,6 +355,29 @@ export const useStore = create<Store>((set, get) => {
     }
   };
 
+  /** Speichert die einzelne Szene eines Bereichs. */
+  const flushSingle = async (paneId: PaneId) => {
+    const pane = get().panes[paneId];
+    const sceneId = pane.sceneId;
+    if (!sceneId) return;
+    const written = pane.content;
+    patchPane(paneId, { saveState: "saving" });
+    try {
+      const result = await api.writeScene(sceneId, written);
+      if (result.status === "conflict") {
+        patchPane(paneId, { saveState: "conflict" });
+      } else {
+        cacheSceneStats(sceneId, written);
+        // Nur "saved", wenn währenddessen nicht weitergetippt wurde.
+        const now = get().panes[paneId];
+        patchPane(paneId, { saveState: now.content === written ? "saved" : "dirty" });
+      }
+    } catch (e) {
+      patchPane(paneId, { saveState: "dirty" });
+      fail(e);
+    }
+  };
+
   /** Speichert einen Fluss: jede geänderte Szene wandert in ihre eigene Datei. */
   const flushFlow = async (paneId: PaneId) => {
     const pane = get().panes[paneId];
@@ -419,6 +454,20 @@ export const useStore = create<Store>((set, get) => {
     return paneId === "rightTop" ? "leftTop" : "rightTop";
   };
 
+  /** Verlässt das offene Projekt geordnet: alles Offene speichern und einen
+   *  Sicherungspunkt setzen. false, wenn ein ungelöster Schreibkonflikt das
+   *  verhindert — dessen lokale Änderungen gingen sonst stumm verloren. */
+  const leaveProject = async (): Promise<boolean> => {
+    if (!get().project) return true;
+    if (PANE_IDS.some((id) => get().panes[id].saveState === "conflict")) {
+      set({ error: "Bitte zuerst den Schreibkonflikt im betroffenen Bereich lösen." });
+      return false;
+    }
+    await get().flushAll();
+    await api.snapshot("Automatischer Sicherungspunkt (Projekt geschlossen)").catch(() => {});
+    return true;
+  };
+
   const resetView = (project: ProjectInfo | null) => {
     set({
       project,
@@ -449,6 +498,7 @@ export const useStore = create<Store>((set, get) => {
 
     createProject: async (parentDir, name, author) => {
       try {
+        if (!(await leaveProject())) return;
         const project = await api.createProject(parentDir, name, name, author);
         pushRecent(project.root);
         resetView(project);
@@ -459,6 +509,7 @@ export const useStore = create<Store>((set, get) => {
 
     openProject: async (path) => {
       try {
+        if (!(await leaveProject())) return;
         const project = await api.openProject(path);
         pushRecent(project.root);
         resetView(project);
@@ -480,9 +531,7 @@ export const useStore = create<Store>((set, get) => {
     },
 
     closeProject: async () => {
-      await get().flushAll();
-      // Letzten Stand sichern, bevor das Projekt zugeht.
-      await api.snapshot("Automatischer Sicherungspunkt (Projekt geschlossen)").catch(() => {});
+      if (!(await leaveProject())) return;
       await api.closeProject().catch(() => {});
       resetView(null);
       set({ focusMode: false, historyFor: null, exportOpen: false });
@@ -626,33 +675,39 @@ export const useStore = create<Store>((set, get) => {
     },
 
     flushPane: async (paneId) => {
+      // Läuft schon ein Speichern, erst dessen Ende abwarten: wer sonst hier
+      // abbräche (Schließen, Projektwechsel, Update), ginge davon aus, dass
+      // alles auf Platte ist, obwohl noch geschrieben wird oder inzwischen
+      // weitergetippt wurde.
+      while (savesInFlight[paneId]) await savesInFlight[paneId];
       const pane = get().panes[paneId];
       if (pane.saveState !== "dirty") return;
       const t = autosaveTimers[paneId];
       if (t) clearTimeout(t);
-      if (pane.flowIds.length) return flushFlow(paneId);
-      if (!pane.sceneId) return;
-      const written = pane.content;
-      patchPane(paneId, { saveState: "saving" });
+      if (!pane.flowIds.length && !pane.sceneId) return;
+      const run = pane.flowIds.length ? flushFlow(paneId) : flushSingle(paneId);
+      savesInFlight[paneId] = run;
       try {
-        const result = await api.writeScene(pane.sceneId, written);
-        if (result.status === "conflict") {
-          patchPane(paneId, { saveState: "conflict" });
-        } else {
-          cacheSceneStats(pane.sceneId, written);
-          // Nur "saved", wenn währenddessen nicht weitergetippt wurde.
-          const now = get().panes[paneId];
-          patchPane(paneId, { saveState: now.content === written ? "saved" : "dirty" });
-        }
-      } catch (e) {
-        patchPane(paneId, { saveState: "dirty" });
-        fail(e);
+        await run;
+      } finally {
+        savesInFlight[paneId] = null;
       }
     },
 
     flushAll: async () => {
       for (const paneId of PANE_IDS) await get().flushPane(paneId);
       for (const flush of [...extraFlushers]) await flush();
+    },
+
+    flushForExit: async (reason) => {
+      if (settingsPersistTimer) {
+        clearTimeout(settingsPersistTimer);
+        settingsPersistTimer = null;
+        await api.saveSettings(get().settings).catch(() => {});
+      }
+      if (!get().project) return;
+      await get().flushAll();
+      await api.snapshot(`Automatischer Sicherungspunkt (${reason})`).catch(() => {});
     },
 
     resolveConflict: async (paneId, action) => {

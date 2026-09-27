@@ -17,6 +17,7 @@ import {
 } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
+import { askLoadExternal } from "../conflict";
 import { useStore } from "../store";
 import { LocationLinks } from "./LocationLinks";
 import { PersonLinks } from "./PersonLinks";
@@ -114,8 +115,16 @@ export function TimelinePanel() {
   async function persist(next: Timeline) {
     setTimeline(next);
     try {
+      let result = await api.saveTimeline(next);
+      if (result.status === "conflict") {
+        if (await askLoadExternal("Der Zeitstrahl")) {
+          setTimeline(await api.loadTimeline());
+          return;
+        }
+        result = await api.saveTimeline(next, true);
+      }
       // Die Antwort trägt die vom Backend vergebenen IDs und Slots.
-      setTimeline(await api.saveTimeline(next));
+      if (result.status === "ok") setTimeline(result.data);
     } catch (e) {
       useStore.setState({ error: String(e) });
     }

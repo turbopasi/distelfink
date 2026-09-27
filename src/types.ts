@@ -30,6 +30,10 @@ export interface ProjectInfo {
 
 export type WriteResult = { status: "ok" } | { status: "conflict" };
 
+/** Wie WriteResult, mit dem vom Backend normalisierten Stand. "conflict":
+ *  Datei wurde extern geändert und nicht überschrieben (außer mit force). */
+export type Saved<T> = { status: "ok"; data: T } | { status: "conflict" };
+
 export type EntityKind = "characters" | "locations";
 
 export interface EntityField {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { useStore } from "../store";
 
 type Phase = "available" | "downloading" | "ready" | "failed";
 
@@ -41,7 +42,7 @@ export function UpdateBanner({ floating = false }: { floating?: boolean }) {
     try {
       let total = 0;
       let done = 0;
-      await update.downloadAndInstall((event) => {
+      await update.download((event) => {
         if (event.event === "Started") {
           total = event.data.contentLength ?? 0;
         } else if (event.event === "Progress") {
@@ -49,9 +50,13 @@ export function UpdateBanner({ floating = false }: { floating?: boolean }) {
           if (total > 0) setProgress(Math.round((done / total) * 100));
         }
       });
-      // Unter Windows startet der Installer und beendet die App selbst; der
-      // Neustart hier greift für den Fall, dass sie noch läuft.
+      // Unter Windows startet der Installer und beendet die App ohne
+      // Rückfrage — also vorher alles Offene sichern. Erst nach dem Download,
+      // damit währenddessen Getipptes auch dabei ist.
       setPhase("ready");
+      await useStore.getState().flushForExit("vor Update");
+      await update.install();
+      // Der Neustart greift für den Fall, dass die App danach noch läuft.
       await relaunch();
     } catch (e) {
       console.error("Update fehlgeschlagen:", e);

@@ -4,8 +4,9 @@
 //! Zeitstrahl: `timeline.json` (Reihenfolge = Array-Reihenfolge).
 
 use crate::project::{
-    make_id, mtime_ms, validate_id_pub, with_project, AppState, WriteResult,
+    make_id, validate_id_pub, with_project, AppState, Saved, WriteResult,
 };
+use crate::fsutil::write_atomic;
 use crate::trash;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
@@ -105,7 +106,7 @@ pub fn save_entity(
         let rel = entity_rel_path(dir, &entity.id);
         let json = serde_json::to_string_pretty(&entity)
             .map_err(|e| format!("Serialisierung: {e}"))?;
-        fs::write(p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
+        write_atomic(&p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
         p.note_mtime(&rel);
         p.search_dirty = true;
         Ok(entity.clone())
@@ -141,7 +142,7 @@ pub fn duplicate_entity(
         let new_rel = entity_rel_path(dir, &entity.id);
         let json =
             serde_json::to_string_pretty(&entity).map_err(|e| format!("Serialisierung: {e}"))?;
-        fs::write(p.abs(&new_rel), json).map_err(|e| format!("{new_rel} schreiben: {e}"))?;
+        write_atomic(&p.abs(&new_rel), json).map_err(|e| format!("{new_rel} schreiben: {e}"))?;
         p.note_mtime(&new_rel);
 
         let doc_src = p.abs(&entity_doc_rel(dir, &id));
@@ -229,7 +230,7 @@ pub fn update_entity_meta(
         }
         let json = serde_json::to_string_pretty(&entity)
             .map_err(|e| format!("Serialisierung: {e}"))?;
-        fs::write(p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
+        write_atomic(&p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
         p.note_mtime(&rel);
         p.search_dirty = true;
         Ok(entity)
@@ -266,14 +267,14 @@ pub fn read_entity_doc(
                     doc.push_str(&format!("- **{}:** {}\n", f.label, f.value));
                 }
             }
-            fs::write(&path, &doc).map_err(|e| format!("{rel} schreiben: {e}"))?;
+            write_atomic(&path, &doc).map_err(|e| format!("{rel} schreiben: {e}"))?;
 
             // Formulardaten aus dem JSON entfernen — das Dokument ist jetzt die Quelle.
             entity.description = String::new();
             entity.fields = Vec::new();
             let json = serde_json::to_string_pretty(&entity)
                 .map_err(|e| format!("Serialisierung: {e}"))?;
-            fs::write(p.abs(&json_rel), json).map_err(|e| format!("{json_rel} schreiben: {e}"))?;
+            write_atomic(&p.abs(&json_rel), json).map_err(|e| format!("{json_rel} schreiben: {e}"))?;
 
             p.note_mtime(&json_rel);
             p.note_mtime(&rel);
@@ -299,14 +300,10 @@ pub fn write_entity_doc(
     with_project(&state, |p| {
         let rel = entity_doc_rel(dir, &id);
         let path = p.abs(&rel);
-        if !force {
-            if let (Some(known), Some(current)) = (p.known_mtimes.get(&rel), mtime_ms(&path)) {
-                if current != *known {
-                    return Ok(WriteResult::Conflict);
-                }
-            }
+        if !force && p.changed_externally(&rel) {
+            return Ok(WriteResult::Conflict);
         }
-        fs::write(&path, &content).map_err(|e| format!("{rel} schreiben: {e}"))?;
+        write_atomic(&path, &content).map_err(|e| format!("{rel} schreiben: {e}"))?;
         p.note_mtime(&rel);
         p.search_dirty = true;
         Ok(WriteResult::Ok)
@@ -344,7 +341,7 @@ pub fn set_entity_image(
 
         let json = serde_json::to_string_pretty(&entity)
             .map_err(|e| format!("Serialisierung: {e}"))?;
-        fs::write(p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
+        write_atomic(&p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
         p.note_mtime(&rel);
         Ok(entity)
     })
@@ -892,35 +889,44 @@ pub struct Timeline {
     pub orientation: String,
 }
 
+const TIMELINE_FILE: &str = "timeline.json";
+
 /// Name des Strangs, in dem Ereignisse aus der Zeit vor den Strängen landen.
 const DEFAULT_TRACK_NAME: &str = "Haupthandlung";
 
 #[tauri::command]
 pub fn load_timeline(state: tauri::State<AppState>) -> Result<Timeline, String> {
     with_project(&state, |p| {
-        let mut timeline: Timeline = fs::read_to_string(p.abs("timeline.json"))
+        let mut timeline: Timeline = fs::read_to_string(p.abs(TIMELINE_FILE))
             .ok()
             .and_then(|raw| serde_json::from_str(&raw).ok())
             .unwrap_or_default();
+        p.note_mtime(TIMELINE_FILE);
         normalize(&mut timeline);
         Ok(timeline)
     })
 }
 
+/// Speichert den Zeitstrahl. Wurde die Datei seit dem Laden von außen geändert
+/// (Sync), bleibt sie unangetastet und die Oberfläche fragt nach — außer `force`.
 #[tauri::command]
 pub fn save_timeline(
     mut timeline: Timeline,
+    force: bool,
     state: tauri::State<AppState>,
-) -> Result<Timeline, String> {
+) -> Result<Saved<Timeline>, String> {
     with_project(&state, |p| {
+        if !force && p.changed_externally(TIMELINE_FILE) {
+            return Ok(Saved::Conflict);
+        }
         normalize(&mut timeline);
         let json = serde_json::to_string_pretty(&timeline)
             .map_err(|e| format!("Serialisierung: {e}"))?;
-        fs::write(p.abs("timeline.json"), json)
-            .map_err(|e| format!("timeline.json schreiben: {e}"))?;
-        p.note_mtime("timeline.json");
+        write_atomic(&p.abs(TIMELINE_FILE), json)
+            .map_err(|e| format!("{TIMELINE_FILE} schreiben: {e}"))?;
+        p.note_mtime(TIMELINE_FILE);
         p.search_dirty = true;
-        Ok(timeline)
+        Ok(Saved::Ok { data: timeline })
     })
 }
 

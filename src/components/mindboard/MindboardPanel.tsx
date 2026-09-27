@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
+import { askLoadExternal } from "../../conflict";
 import { extraFlushers, useStore, type PaneId } from "../../store";
 import type { MindView, Mindboard } from "../../types";
 import { BoardCanvas } from "./BoardCanvas";
@@ -28,15 +29,41 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
   const version = useStore((s) => s.mindboardVersion);
   const [name, setName] = useState("");
 
+  // Solange die Konfliktfrage offen ist, wartet jedes weitere Speichern auf
+  // die Antwort — sonst stapeln sich Dialoge.
+  const conflictOpen = useRef<Promise<void> | null>(null);
+
   const save = useCallback(async () => {
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
+    if (conflictOpen.current) return conflictOpen.current;
     const current = boardRef.current;
     if (!current) return;
-    await api.saveMindboard({ ...current, view: viewRef.current ?? current.view });
-  }, []);
+    const withView = () => {
+      const b = boardRef.current ?? current;
+      return { ...b, view: viewRef.current ?? b.view };
+    };
+    const result = await api.saveMindboard(withView());
+    if (result.status === "ok") return;
+
+    conflictOpen.current = (async () => {
+      if (await askLoadExternal(`Das Mindboard „${current.name}“`)) {
+        const fresh = await api.loadMindboard(boardId);
+        boardRef.current = fresh;
+        viewRef.current = fresh.view ?? viewRef.current;
+        historyRef.current = new History<Mindboard>();
+        setBoard(fresh);
+        setHistoryTick((t) => t + 1);
+      } else {
+        await api.saveMindboard(withView(), true);
+      }
+    })().finally(() => {
+      conflictOpen.current = null;
+    });
+    return conflictOpen.current;
+  }, [boardId]);
 
   const scheduleSave = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);

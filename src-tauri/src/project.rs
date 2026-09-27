@@ -6,12 +6,13 @@
 //! ihrer stabilen Node-ID. Dateien werden beim Umsortieren im Binder NICHT
 //! umbenannt oder verschoben — das vermeidet Sync-Konflikte.
 
+use crate::fsutil::write_atomic;
 use crate::trash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use std::time::UNIX_EPOCH;
 
 pub const FORMAT_VERSION: u32 = 1;
@@ -100,6 +101,15 @@ pub struct OpenProject {
 #[derive(Default)]
 pub struct AppState(pub Mutex<Option<OpenProject>>);
 
+impl AppState {
+    /// Sperrt den Zustand. Ein Panic in einem früheren Command vergiftet den
+    /// Mutex; ohne das `into_inner` ließe sich danach bis zum Neustart nichts
+    /// mehr speichern — genau dann, wenn ungesicherter Text im Editor steht.
+    pub(crate) fn lock(&self) -> MutexGuard<'_, Option<OpenProject>> {
+        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectInfo {
@@ -114,6 +124,17 @@ pub enum WriteResult {
     Ok,
     /// Datei wurde seit letztem bekannten Stand extern verändert;
     /// nicht geschrieben (außer `force`).
+    Conflict,
+}
+
+/// Wie `WriteResult`, für Dateien, die als Ganzes gespeichert werden und deren
+/// normalisierten Stand die Oberfläche zurückbekommt (Zeitstrahl, Mindboards).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase", tag = "status")]
+pub enum Saved<T> {
+    Ok { data: T },
+    /// Datei wurde seit letztem bekannten Stand extern verändert; nicht
+    /// geschrieben (außer `force`).
     Conflict,
 }
 
@@ -283,13 +304,50 @@ impl OpenProject {
         }
     }
 
+    /// true, wenn `rel` seit dem letzten eigenen Lesen/Schreiben von außen
+    /// verändert wurde. Dateien ohne bekannten Stand gelten als unverändert.
+    pub(crate) fn changed_externally(&self, rel: &str) -> bool {
+        match (self.known_mtimes.get(rel), mtime_ms(&self.abs(rel))) {
+            (Some(known), Some(current)) => current != *known,
+            _ => false,
+        }
+    }
+
     pub(crate) fn write_meta(&mut self) -> Result<(), String> {
         let json = serde_json::to_string_pretty(&self.meta)
             .map_err(|e| format!("Serialisierung fehlgeschlagen: {e}"))?;
         let path = self.abs(PROJECT_FILE);
-        fs::write(&path, json).map_err(|e| format!("project.json schreiben: {e}"))?;
+        write_atomic(&path, json).map_err(|e| format!("project.json schreiben: {e}"))?;
         self.note_mtime(PROJECT_FILE);
         self.search_dirty = true;
+        Ok(())
+    }
+
+    /// Übernimmt eine von außen geänderte project.json (Sync von einem zweiten
+    /// Rechner), bevor der Binder geändert wird. Sonst schriebe die nächste
+    /// Binder-Änderung den alten Stand aus dem Speicher zurück, und dort neu
+    /// angelegte Szenen verschwänden aus dem Binder. Ist die Datei gerade
+    /// unlesbar (Sync mittendrin), bricht die Änderung ab, statt sie zu
+    /// überschreiben.
+    pub(crate) fn refresh_meta(&mut self) -> Result<(), String> {
+        if !self.changed_externally(PROJECT_FILE) {
+            return Ok(());
+        }
+        self.meta = read_meta(&self.root)?;
+        self.note_mtime(PROJECT_FILE);
+        self.search_dirty = true;
+        // Szenen, die dabei hinzugekommen sind, bekommen einen bekannten Stand —
+        // sonst liefe ihr erstes Speichern ohne Konfliktprüfung.
+        let mut ids = Vec::new();
+        for n in &self.meta.binder {
+            collect_scene_ids(n, &mut ids);
+        }
+        for id in ids {
+            let rel = scene_rel_path(&id);
+            if !self.known_mtimes.contains_key(&rel) {
+                self.note_mtime(&rel);
+            }
+        }
         Ok(())
     }
 
@@ -321,9 +379,44 @@ pub(crate) fn with_project<T>(
     state: &tauri::State<AppState>,
     f: impl FnOnce(&mut OpenProject) -> Result<T, String>,
 ) -> Result<T, String> {
-    let mut guard = state.0.lock().map_err(|_| "State-Lock vergiftet".to_string())?;
+    let mut guard = state.lock();
     let project = guard.as_mut().ok_or("Kein Projekt geöffnet")?;
     f(project)
+}
+
+/// Wie `with_project`, für Änderungen am Binder: übernimmt vorher externe
+/// Änderungen an project.json (siehe `refresh_meta`).
+fn with_binder<T>(
+    state: &tauri::State<AppState>,
+    f: impl FnOnce(&mut OpenProject) -> Result<T, String>,
+) -> Result<T, String> {
+    with_project(state, |p| {
+        p.refresh_meta()?;
+        f(p)
+    })
+}
+
+/// Liest und prüft project.json.
+fn read_meta(root: &Path) -> Result<ProjectMeta, String> {
+    let raw = fs::read_to_string(root.join(PROJECT_FILE))
+        .map_err(|e| format!("project.json lesen: {e}"))?;
+    let meta: ProjectMeta =
+        serde_json::from_str(&raw).map_err(|e| format!("project.json ungültig: {e}"))?;
+    if meta.format_version > FORMAT_VERSION {
+        return Err(format!(
+            "Projektformat v{} ist neuer als diese App-Version unterstützt (v{FORMAT_VERSION})",
+            meta.format_version
+        ));
+    }
+    Ok(meta)
+}
+
+/// Entfernt Zwischendateien, die ein Absturz beim Speichern hinterlassen hat.
+fn remove_stale_tmp_files(root: &Path) {
+    for dir in ["", "manuscript", "characters", "locations", crate::mindboard::DIR, trash::TRASH_DIR]
+    {
+        crate::fsutil::remove_stale_tmp_files(&root.join(dir));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -355,9 +448,7 @@ pub fn create_project(
     for dir in ["manuscript", "characters", "locations", ".cache"] {
         fs::create_dir_all(root.join(dir)).map_err(|e| format!("Ordner anlegen ({dir}): {e}"))?;
     }
-    // Vorbereitung für Ebene C (Phase 5): Cache und Papierkorb gehören nicht ins Repo.
-    fs::write(root.join(".gitignore"), ".cache/\n.trash/\n")
-        .map_err(|e| format!(".gitignore schreiben: {e}"))?;
+    // Die .gitignore legt `versioning::ensure_repo` unten an.
     fs::write(root.join("timeline.json"), "{\n  \"events\": []\n}\n")
         .map_err(|e| format!("timeline.json schreiben: {e}"))?;
 
@@ -391,29 +482,21 @@ pub fn create_project(
     // Ebene C: Versionierung ab dem ersten Moment.
     crate::versioning::ensure_repo(&project.root, &project.meta.author, "Projekt angelegt")?;
     let info = project.info();
-    *state.0.lock().map_err(|_| "State-Lock vergiftet")? = Some(project);
+    *state.lock() = Some(project);
     Ok(info)
 }
 
 #[tauri::command]
 pub fn open_project(path: String, state: tauri::State<AppState>) -> Result<ProjectInfo, String> {
     let root = PathBuf::from(&path);
-    let meta_path = root.join(PROJECT_FILE);
-    if !meta_path.is_file() {
+    if !root.join(PROJECT_FILE).is_file() {
         return Err(format!(
             "Kein Projekt: {} enthält keine {PROJECT_FILE}",
             root.display()
         ));
     }
-    let raw = fs::read_to_string(&meta_path).map_err(|e| format!("project.json lesen: {e}"))?;
-    let meta: ProjectMeta =
-        serde_json::from_str(&raw).map_err(|e| format!("project.json ungültig: {e}"))?;
-    if meta.format_version > FORMAT_VERSION {
-        return Err(format!(
-            "Projektformat v{} ist neuer als diese App-Version unterstützt (v{FORMAT_VERSION})",
-            meta.format_version
-        ));
-    }
+    let meta = read_meta(&root)?;
+    remove_stale_tmp_files(&root);
     let mut project = OpenProject {
         root,
         meta,
@@ -428,7 +511,7 @@ pub fn open_project(path: String, state: tauri::State<AppState>) -> Result<Proje
         "Automatischer Sicherungspunkt (Projekt geöffnet)",
     )?;
     let info = project.info();
-    *state.0.lock().map_err(|_| "State-Lock vergiftet")? = Some(project);
+    *state.lock() = Some(project);
     Ok(info)
 }
 
@@ -478,8 +561,8 @@ pub fn save_project_as(
     }
 
     let source = {
-        let guard = state.0.lock().map_err(|_| "State-Lock vergiftet".to_string())?;
-        guard.as_ref().ok_or("Kein Projekt geoeffnet")?.root.clone()
+        let guard = state.lock();
+        guard.as_ref().ok_or("Kein Projekt geöffnet")?.root.clone()
     };
     if target.starts_with(&source) {
         return Err("Das Ziel darf nicht im Projekt selbst liegen".into());
@@ -487,10 +570,7 @@ pub fn save_project_as(
     copy_tree(&source, &target)?;
 
     // Die Kopie traegt den neuen Namen als Titel; alles andere bleibt gleich.
-    let meta_path = target.join(PROJECT_FILE);
-    let raw = fs::read_to_string(&meta_path).map_err(|e| format!("project.json lesen: {e}"))?;
-    let mut meta: ProjectMeta =
-        serde_json::from_str(&raw).map_err(|e| format!("project.json ungueltig: {e}"))?;
+    let mut meta = read_meta(&target)?;
     meta.title = safe_name;
 
     let mut project = OpenProject {
@@ -503,13 +583,13 @@ pub fn save_project_as(
     project.snapshot_mtimes();
     crate::versioning::ensure_repo(&project.root, &project.meta.author, "Projekt kopiert")?;
     let info = project.info();
-    *state.0.lock().map_err(|_| "State-Lock vergiftet")? = Some(project);
+    *state.lock() = Some(project);
     Ok(info)
 }
 
 #[tauri::command]
 pub fn close_project(state: tauri::State<AppState>) -> Result<(), String> {
-    *state.0.lock().map_err(|_| "State-Lock vergiftet")? = None;
+    *state.lock() = None;
     Ok(())
 }
 
@@ -543,14 +623,10 @@ pub fn write_scene(
         let rel = scene_rel_path(&id);
         let path = p.abs(&rel);
         // Externe Änderung? Nur blockieren, wenn wir einen früheren Stand kennen.
-        if !force {
-            if let (Some(known), Some(current)) = (p.known_mtimes.get(&rel), mtime_ms(&path)) {
-                if current != *known {
-                    return Ok(WriteResult::Conflict);
-                }
-            }
+        if !force && p.changed_externally(&rel) {
+            return Ok(WriteResult::Conflict);
         }
-        fs::write(&path, &content).map_err(|e| format!("Szene schreiben ({id}): {e}"))?;
+        write_atomic(&path, &content).map_err(|e| format!("Szene schreiben ({id}): {e}"))?;
         if let Some(mt) = mtime_ms(&path) {
             p.known_mtimes.insert(rel, mt);
         }
@@ -570,7 +646,7 @@ pub fn create_node(
     title: String,
     state: tauri::State<AppState>,
 ) -> Result<ProjectInfo, String> {
-    with_project(&state, |p| {
+    with_binder(&state, |p| {
         let id = make_id(&title);
         if kind == NodeKind::Scene {
             fs::write(p.abs(&scene_rel_path(&id)), "")
@@ -599,7 +675,7 @@ pub fn rename_node(
     title: String,
     state: tauri::State<AppState>,
 ) -> Result<ProjectInfo, String> {
-    with_project(&state, |p| {
+    with_binder(&state, |p| {
         find_node_mut(&mut p.meta.binder, &id)
             .ok_or(format!("Node nicht gefunden: {id}"))?
             .title = title;
@@ -615,7 +691,7 @@ pub fn move_node(
     index: usize,
     state: tauri::State<AppState>,
 ) -> Result<ProjectInfo, String> {
-    with_project(&state, |p| {
+    with_binder(&state, |p| {
         if let Some(pid) = &new_parent_id {
             if *pid == id || is_descendant(&p.meta.binder, &id, pid) {
                 return Err("Node kann nicht in sich selbst verschoben werden".into());
@@ -649,7 +725,7 @@ pub fn update_node_meta(
     image: Option<String>,
     state: tauri::State<AppState>,
 ) -> Result<ProjectInfo, String> {
-    with_project(&state, |p| {
+    with_binder(&state, |p| {
         let node = find_node_mut(&mut p.meta.binder, &id)
             .ok_or(format!("Node nicht gefunden: {id}"))?;
         if let Some(s) = synopsis {
@@ -683,7 +759,7 @@ pub fn update_node_meta(
 #[tauri::command]
 pub fn duplicate_node(id: String, state: tauri::State<AppState>) -> Result<ProjectInfo, String> {
     validate_id(&id)?;
-    with_project(&state, |p| {
+    with_binder(&state, |p| {
         // Erst klonen, dann den Lesezugriff auf den Baum wieder freigeben.
         let (clone, scene_copies) = {
             let source =
@@ -719,7 +795,7 @@ pub fn duplicate_node(id: String, state: tauri::State<AppState>) -> Result<Proje
 /// ließe sich später nur die Datei zurückholen, nicht der Eintrag.
 #[tauri::command]
 pub fn delete_node(id: String, state: tauri::State<AppState>) -> Result<ProjectInfo, String> {
-    with_project(&state, |p| {
+    with_binder(&state, |p| {
         let (parent_id, index) = parent_and_index(&p.meta.binder, &id)
             .ok_or(format!("Node nicht gefunden: {id}"))?;
         let node =
@@ -808,4 +884,75 @@ pub fn check_external_changes(state: tauri::State<AppState>) -> Result<Vec<Strin
             .collect();
         Ok(changed)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, SystemTime};
+
+    fn scene(id: &str) -> BinderNode {
+        BinderNode::new(id.into(), NodeKind::Scene, id.into())
+    }
+
+    fn open_test_project(binder: Vec<BinderNode>) -> OpenProject {
+        let root = std::env::temp_dir().join(format!("distelfink-project-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(root.join("manuscript")).unwrap();
+        let mut p = OpenProject {
+            root,
+            meta: ProjectMeta {
+                format_version: FORMAT_VERSION,
+                title: "Test".into(),
+                author: String::new(),
+                created: String::new(),
+                binder,
+            },
+            known_mtimes: HashMap::new(),
+            search_dirty: false,
+        };
+        p.write_meta().unwrap();
+        p.snapshot_mtimes();
+        p
+    }
+
+    /// Schreibt project.json wie ein Sync-Client von außen — mit sicher
+    /// abweichender mtime, auch wenn der Test schneller ist als die Uhr.
+    fn write_externally(p: &OpenProject, meta: &ProjectMeta) {
+        let path = p.abs(PROJECT_FILE);
+        fs::write(&path, serde_json::to_string(meta).unwrap()).unwrap();
+        let later = SystemTime::now() + Duration::from_secs(5);
+        fs::File::options().write(true).open(&path).unwrap().set_modified(later).unwrap();
+    }
+
+    #[test]
+    fn binder_aenderung_behaelt_extern_angelegte_szenen() {
+        let mut p = open_test_project(vec![scene("a-111111")]);
+        let mut external = p.meta.clone();
+        external.binder.push(scene("b-222222"));
+        write_externally(&p, &external);
+
+        p.refresh_meta().unwrap();
+        find_node_mut(&mut p.meta.binder, "a-111111").unwrap().title = "Neu".into();
+        p.write_meta().unwrap();
+
+        let on_disk = read_meta(&p.root).unwrap();
+        assert_eq!(on_disk.binder.len(), 2);
+        assert_eq!(on_disk.binder[0].title, "Neu");
+        assert!(!p.changed_externally(PROJECT_FILE));
+        let _ = fs::remove_dir_all(&p.root);
+    }
+
+    #[test]
+    fn unlesbare_projektdatei_bricht_die_aenderung_ab() {
+        let mut p = open_test_project(vec![scene("a-111111")]);
+        let path = p.abs(PROJECT_FILE);
+        fs::write(&path, "{ halb geschrieben").unwrap();
+        let later = SystemTime::now() + Duration::from_secs(5);
+        fs::File::options().write(true).open(&path).unwrap().set_modified(later).unwrap();
+
+        assert!(p.refresh_meta().is_err());
+        // Nichts überschrieben — der Sync kann die Datei noch fertig schreiben.
+        assert_eq!(fs::read_to_string(&path).unwrap(), "{ halb geschrieben");
+        let _ = fs::remove_dir_all(&p.root);
+    }
 }

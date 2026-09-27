@@ -11,6 +11,7 @@
 use crate::project::{
     restore_binder_node, with_project, AppState, BinderNode, OpenProject, ProjectInfo,
 };
+use crate::fsutil::write_atomic;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -75,7 +76,7 @@ pub(crate) fn load_index(p: &OpenProject) -> Vec<TrashItem> {
 fn save_index(p: &mut OpenProject, items: &[TrashItem]) -> Result<(), String> {
     fs::create_dir_all(p.abs(TRASH_DIR)).map_err(|e| format!(".trash anlegen: {e}"))?;
     let json = serde_json::to_string_pretty(items).map_err(|e| format!("Serialisierung: {e}"))?;
-    fs::write(p.abs(TRASH_INDEX), json).map_err(|e| format!("{TRASH_INDEX} schreiben: {e}"))
+    write_atomic(&p.abs(TRASH_INDEX), json).map_err(|e| format!("{TRASH_INDEX} schreiben: {e}"))
 }
 
 /// Verschiebt eine Projektdatei in den Papierkorb. `Ok(None)`, wenn es sie
@@ -134,6 +135,8 @@ pub fn list_trash(state: tauri::State<AppState>) -> Result<Vec<TrashItem>, Strin
 #[tauri::command]
 pub fn restore_trash(key: String, state: tauri::State<AppState>) -> Result<ProjectInfo, String> {
     with_project(&state, |p| {
+        // Der Knoten kommt in den Binder zurück — auf dessen aktuellen Stand.
+        p.refresh_meta()?;
         let items = load_index(p);
         let pos = items
             .iter()

@@ -1,5 +1,6 @@
 import { useEffect, type MouseEvent as ReactMouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { PANE_IDS, PANES_FOR_MODE, useStore, type PaneId } from "./store";
 import { eventToCombo, SHORTCUT_ACTIONS } from "./settings";
 import { StartScreen } from "./components/StartScreen";
@@ -22,6 +23,9 @@ import { AboutOverlay } from "./components/AboutDialog";
 import { UpdateBanner } from "./components/UpdateBanner";
 import "./App.css";
 
+/** Wie lange das Schließen höchstens aufs Speichern wartet. */
+const CLOSE_FLUSH_TIMEOUT_MS = 15_000;
+
 function App() {
   const project = useStore((s) => s.project);
   const focusMode = useStore((s) => s.focusMode);
@@ -34,6 +38,47 @@ function App() {
       const s = useStore.getState();
       if (focused) void s.checkExternalChanges();
       else void s.flushAll();
+    });
+    return () => {
+      void unlisten.then((f) => f());
+    };
+  }, []);
+
+  // Fenster schließen (X, Alt+F4, „Beenden“): erst alles sichern. Ohne diesen
+  // Handler gingen die letzten Sekunden Text verloren — ein Klick aufs X nimmt
+  // dem Fenster nicht den Fokus, das Speichern beim Fokusverlust greift also nicht.
+  useEffect(() => {
+    const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
+      const s = useStore.getState();
+      const conflict = PANE_IDS.some((id) => s.panes[id].saveState === "conflict");
+      if (
+        conflict &&
+        !(await ask(
+          "In einem Bereich ist ein Schreibkonflikt noch offen. Beim Schließen gehen " +
+            "die eigenen Änderungen dieses Dokuments verloren.",
+          {
+            title: "Trotzdem schließen?",
+            kind: "warning",
+            okLabel: "Schließen",
+            cancelLabel: "Zurück zur App",
+          },
+          // Scheitert schon die Rückfrage, lieber schließen als festhängen.
+        ).catch(() => true))
+      ) {
+        event.preventDefault();
+        return;
+      }
+      // Das Fenster muss auf jeden Fall zugehen können — auch wenn das
+      // Speichern hängt oder scheitert. Ein Fehler hier bliebe sonst ein
+      // Fenster, das sich nicht mehr schließen lässt.
+      try {
+        await Promise.race([
+          s.flushForExit("App beendet"),
+          new Promise((resolve) => setTimeout(resolve, CLOSE_FLUSH_TIMEOUT_MS)),
+        ]);
+      } catch (e) {
+        console.error("Speichern beim Schließen fehlgeschlagen:", e);
+      }
     });
     return () => {
       void unlisten.then((f) => f());

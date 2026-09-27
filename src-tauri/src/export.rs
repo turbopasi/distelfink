@@ -132,7 +132,7 @@ fn load_custom_templates(p: &OpenProject) -> Vec<ExportTemplate> {
 fn store_custom_templates(p: &OpenProject, templates: Vec<ExportTemplate>) -> Result<(), String> {
     let json = serde_json::to_string_pretty(&TemplatesFile { templates })
         .map_err(|e| format!("Vorlagen serialisieren: {e}"))?;
-    fs::write(p.abs(TEMPLATES_FILE), json).map_err(|e| format!("Vorlagen schreiben: {e}"))
+    crate::fsutil::write_atomic(&p.abs(TEMPLATES_FILE), json).map_err(|e| format!("Vorlagen schreiben: {e}"))
 }
 
 fn all_templates(p: &OpenProject) -> Vec<ExportTemplate> {

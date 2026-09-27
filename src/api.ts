@@ -9,6 +9,7 @@ import type {
   MindboardInfo,
   NodeKind,
   ProjectInfo,
+  Saved,
   SearchHit,
   Timeline,
   TrashItem,
@@ -90,13 +91,14 @@ export const api = {
   readDocImage: (rel: string) => invoke<string | null>("read_doc_image", { rel }),
 
   loadTimeline: () => invoke<Timeline>("load_timeline"),
-  saveTimeline: (timeline: Timeline) =>
-    invoke<Timeline>("save_timeline", { timeline }),
+  saveTimeline: (timeline: Timeline, force = false) =>
+    invoke<Saved<Timeline>>("save_timeline", { timeline, force }),
 
   listMindboards: () => invoke<MindboardInfo[]>("list_mindboards"),
   createMindboard: (name: string) => invoke<MindboardInfo>("create_mindboard", { name }),
   loadMindboard: (id: string) => invoke<Mindboard>("load_mindboard", { id }),
-  saveMindboard: (board: Mindboard) => invoke<Mindboard>("save_mindboard", { board }),
+  saveMindboard: (board: Mindboard, force = false) =>
+    invoke<Saved<Mindboard>>("save_mindboard", { board, force }),
   renameMindboard: (id: string, name: string) =>
     invoke<void>("rename_mindboard", { id, name }),
   deleteMindboard: (id: string) => invoke<void>("delete_mindboard", { id }),

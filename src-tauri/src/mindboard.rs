@@ -7,7 +7,8 @@
 //! und eine Verbindung muss schon im selben Schritt auf eine neue Notiz
 //! zeigen können.
 
-use crate::project::{make_id, validate_id_pub, with_project, AppState};
+use crate::fsutil::write_atomic;
+use crate::project::{make_id, validate_id_pub, with_project, AppState, Saved};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -188,7 +189,7 @@ fn write_board(p: &mut crate::project::OpenProject, board: &Mindboard) -> Result
     let json =
         serde_json::to_string_pretty(board).map_err(|e| format!("Serialisierung: {e}"))?;
     let rel = rel_path(&board.id);
-    fs::write(p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
+    write_atomic(&p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
     p.note_mtime(&rel);
     p.search_dirty = true;
     Ok(())
@@ -249,12 +250,19 @@ pub fn load_mindboard(id: String, state: tauri::State<AppState>) -> Result<Mindb
     })
 }
 
+/// Speichert ein Board. Wurde die Datei seit dem Laden von außen geändert
+/// (Sync), bleibt sie unangetastet und die Oberfläche fragt nach — außer `force`.
 #[tauri::command]
 pub fn save_mindboard(
     mut board: Mindboard,
+    force: bool,
     state: tauri::State<AppState>,
-) -> Result<Mindboard, String> {
+) -> Result<Saved<Mindboard>, String> {
     with_project(&state, |p| {
+        validate_id_pub(&board.id)?;
+        if !force && p.changed_externally(&rel_path(&board.id)) {
+            return Ok(Saved::Conflict);
+        }
         // Der Name gehört der Seitenleiste (rename_mindboard): ein offenes
         // Board speichert sonst den Namen von vor dem Umbenennen zurück.
         // Und ein gelöschtes Board darf ein verspätetes Speichern nicht
@@ -264,7 +272,7 @@ pub fn save_mindboard(
         board.name = existing.name;
         normalize(&mut board);
         write_board(p, &board)?;
-        Ok(board)
+        Ok(Saved::Ok { data: board })
     })
 }
 
@@ -311,8 +319,7 @@ pub(crate) fn search_body(board: &Mindboard) -> String {
     parts.extend(board.edges.iter().map(|e| e.label.as_str()));
     parts.extend(board.shapes.iter().map(|s| s.title.as_str()));
     parts.retain(|s| !s.is_empty());
-    parts.join("
-")
+    parts.join("\n")
 }
 
 /// Alle Boards eines Projekts, fürs Durchsuchen.

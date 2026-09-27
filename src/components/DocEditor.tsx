@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { useStore, type PaneId } from "../store";
+import { extraFlushers, useStore, type PaneId } from "../store";
 import { docExtensions, getMarkdown, Toolbar, useEditorLanguage } from "./RichEditor";
 import { imagePasteHandler } from "./DocImage";
 import { PlanTagOverlay } from "./PlanTagOverlay";
@@ -12,6 +12,8 @@ import { EditorContextMenu } from "./EditorContextMenu";
 import type { WriteResult } from "../types";
 
 const AUTOSAVE_MS = 2000;
+
+type Status = "saved" | "dirty" | "conflict";
 
 export function DocEditor({
   docKey,
@@ -66,30 +68,65 @@ function DocEditorInstance({
   read: () => Promise<string>;
   write: (content: string, force?: boolean) => Promise<WriteResult>;
 }) {
-  const [status, setStatus] = useState<"saved" | "dirty" | "conflict">("saved");
+  const [status, setStatusState] = useState<Status>("saved");
+  // Refs, weil Timer, Unmount und `flushAll` den Stand außerhalb des Renderns
+  // brauchen: `latest` ist der Editorinhalt, `saved` der zuletzt geschriebene.
+  const statusRef = useRef<Status>("saved");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(initialContent);
-  const statusRef = useRef(status);
-  statusRef.current = status;
+  const saved = useRef(initialContent);
+  const inFlight = useRef<Promise<void> | null>(null);
+
+  const setStatus = (next: Status) => {
+    statusRef.current = next;
+    setStatusState(next);
+  };
 
   const flush = useCallback(async () => {
-    if (timer.current) clearTimeout(timer.current);
-    try {
-      const result = await write(latest.current);
-      setStatus(result.status === "conflict" ? "conflict" : "saved");
-    } catch (e) {
-      useStore.setState({ error: String(e) });
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
     }
+    // Nie zwei Schreibvorgänge gleichzeitig: ein laufender könnte sonst nach
+    // dem neueren fertig werden und dessen Stand als „gespeichert“ melden.
+    while (inFlight.current) await inFlight.current;
+    if (statusRef.current === "conflict" || latest.current === saved.current) return;
+
+    const content = latest.current;
+    const run = (async () => {
+      try {
+        const result = await write(content);
+        if (result.status === "conflict") {
+          setStatus("conflict");
+          return;
+        }
+        saved.current = content;
+        // Wurde währenddessen weitergetippt, ist der Stand noch nicht gesichert.
+        setStatus(latest.current === content ? "saved" : "dirty");
+      } catch (e) {
+        useStore.setState({ error: String(e) });
+      }
+    })();
+    inFlight.current = run;
+    try {
+      await run;
+    } finally {
+      inFlight.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [write]);
 
   const flushRef = useRef(flush);
   flushRef.current = flush;
 
+  // Bei `flushAll` (Projekt schließen, Fenster schließen, Update …) mitspeichern
+  // und beim Verlassen ungespeicherte Änderungen sichern.
   useEffect(() => {
+    const flushForStore = () => flushRef.current();
+    extraFlushers.add(flushForStore);
     return () => {
-      if (timer.current) clearTimeout(timer.current);
-      // Beim Verlassen ungespeicherte Änderungen sichern.
-      if (statusRef.current === "dirty") void flushRef.current();
+      extraFlushers.delete(flushForStore);
+      void flushRef.current();
     };
   }, []);
 
@@ -99,13 +136,12 @@ function DocEditorInstance({
     content: initialContent,
     onUpdate: ({ editor }) => {
       latest.current = getMarkdown(editor);
-      setStatus("dirty");
+      // Ein offener Konflikt bleibt sichtbar, bis er entschieden ist.
+      if (statusRef.current !== "conflict") setStatus("dirty");
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => void flushRef.current(), AUTOSAVE_MS);
     },
-    onBlur: () => {
-      if (statusRef.current === "dirty") void flushRef.current();
-    },
+    onBlur: () => void flushRef.current(),
   });
 
   useEditorLanguage(editor);
@@ -121,8 +157,10 @@ function DocEditorInstance({
             onClick={async () => {
               try {
                 const c = await read();
+                if (timer.current) clearTimeout(timer.current);
                 latest.current = c;
-                editor.commands.setContent(c);
+                saved.current = c;
+                editor.commands.setContent(c, { emitUpdate: false });
                 setStatus("saved");
               } catch (e) {
                 useStore.setState({ error: String(e) });
@@ -133,11 +171,14 @@ function DocEditorInstance({
           </button>
           <button
             onClick={async () => {
-              const result = await write(latest.current, true).catch((e) => {
+              const content = latest.current;
+              const result = await write(content, true).catch((e) => {
                 useStore.setState({ error: String(e) });
                 return null;
               });
-              if (result) setStatus("saved");
+              if (!result) return;
+              saved.current = content;
+              setStatus(latest.current === content ? "saved" : "dirty");
             }}
           >
             Eigene Version behalten (extern überschreiben)

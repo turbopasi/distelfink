@@ -1,4 +1,5 @@
 mod export;
+mod fsutil;
 mod mindboard;
 mod project;
 mod research;

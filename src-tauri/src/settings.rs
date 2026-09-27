@@ -35,7 +35,8 @@ pub fn load_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String>
 pub fn save_settings(app: tauri::AppHandle, settings: serde_json::Value) -> Result<(), String> {
     let path = settings_path(&app)?;
     let text = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
-    fs::write(&path, text).map_err(|e| format!("Einstellungen nicht speicherbar: {e}"))
+    crate::fsutil::write_atomic(&path, text)
+        .map_err(|e| format!("Einstellungen nicht speicherbar: {e}"))
 }
 
 // ---------------------------------------------------------------------------
