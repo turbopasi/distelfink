@@ -10,6 +10,47 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.13.1 — 2026-09-27
+
+Ein Stabilitäts-Update ohne neue Funktionen: Distelfink verliert keinen Text
+mehr beim Schließen und kommt mit Sync über mehrere Rechner besser zurecht.
+
+### Behoben
+
+- **Kein Textverlust mehr beim Schließen.** Wer das Fenster über das X oder
+  Alt+F4 schloss, verlor bis zu zwei Sekunden Getipptes, dazu offene Änderungen
+  an Mindboards, Personen- und Orts-Dokumenten. Jetzt wird vorher alles
+  gesichert und ein Sicherungspunkt gesetzt. Ist noch ein Schreibkonflikt
+  offen, fragt Distelfink nach.
+- **Update und Projektwechsel sichern vorher.** Das automatische Update beendet
+  die App erst, nachdem alles gespeichert ist. Wer über „Letzte Projekte" ein
+  anderes Projekt öffnet, verliert ebenfalls nichts mehr.
+- **Sync von einem zweiten Rechner.** Änderungen am Binder übernehmen jetzt,
+  was ein anderer Rechner inzwischen in der Projektdatei geändert hat. Bisher
+  konnten dort angelegte Szenen dabei aus dem Binder verschwinden. Zeitstrahl
+  und Mindboards erkennen extern geänderte Dateien und fragen, welche Version
+  gelten soll.
+- **Sichereres Speichern.** Dateien werden erst vollständig geschrieben und
+  dann ausgetauscht. Ein Absturz oder Stromausfall mitten im Speichern
+  hinterlässt keine leere oder halbe Szene mehr.
+- Ein Eintrag verschwand aus dem Binder, wenn das Verschieben in einen nicht
+  mehr vorhandenen Ordner scheiterte.
+- Nach einem internen Fehler ließ sich bis zum Neustart nichts mehr speichern.
+
+### Geändert
+
+- **Keine Hänger mehr.** Export (vor allem PDF), Suche, Sicherungspunkte und
+  das Öffnen großer Projekte laufen im Hintergrund. Die Oberfläche bleibt
+  bedienbar, und Schreiben und Speichern laufen währenddessen weiter.
+- **Schnellere Suche** in großen Projekten: der Suchindex entsteht in einem
+  Rutsch statt Eintrag für Eintrag.
+- **Flüssigeres Tippen in langen Texten**, besonders im Fluss-Modus. Wörter und
+  Normseiten in der Statusleiste zählen jetzt einen Augenblick nach dem Tippen.
+- **Die Ansicht eines Mindboards** (Ausschnitt und Zoom) merkt sich jeder
+  Rechner selbst. Verschieben und Zoomen ändern die Projektdatei nicht mehr –
+  kein Sync und kein Verlaufseintrag pro Mausrad.
+- Aktualisierte Bibliotheken: Editor (tiptap 3.31) und React 19.3.
+
 ## 0.13.0 — 2026-09-26
 
 ### Neu
