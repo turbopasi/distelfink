@@ -432,6 +432,46 @@
     color: var(--text-muted);
     margin: 0;
   }
+  .card .new {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: var(--radius-pill, 999px);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    vertical-align: 2px;
+    color: var(--accent);
+    background: color-mix(in oklab, var(--accent) 14%, var(--bg));
+  }
+
+  /* -------- Hinweis auf die neueste Version -------- */
+  .news {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 22px;
+    padding: 5px 14px 5px 6px;
+    border-radius: var(--radius-pill, 999px);
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-size: 13px;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: border-color 120ms ease, color 120ms ease;
+  }
+  .news:hover { border-color: var(--accent); color: var(--text); }
+  .news .tag {
+    padding: 2px 8px;
+    border-radius: var(--radius-pill, 999px);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--accent-text);
+    background: var(--accent);
+  }
 
   /* -------- Tech-Sektion: bewusst invertiert, eigene Stimmung -------- */
   .tech {
@@ -550,11 +590,14 @@
         <span class="brand-mark" role="img" aria-label="Distelfink"></span>
         <span class="beta-pill">Beta</span>
       </div>
+      <a class="news" href="https://github.com/turbopasi/distelfink/blob/main/CHANGELOG.md" target="_blank" rel="noopener">
+        <span class="tag">Neu in 0.13</span> Mindboards fürs freie Brainstorming →
+      </a>
       <p class="kicker">Kostenlos &amp; Open Source</p>
       <h1>Schreibsoftware für Autoren, die einfach schreiben wollen.</h1>
       <p class="sub">
-        Distelfink bringt Binder, Corkboard, Zeitstrahl, Personen- und
-        Ortsdatenbank sowie deutsche Normseite in einer schnellen
+        Distelfink bringt Binder, Corkboard, Mindboards, Zeitstrahl, Personen-
+        und Ortsdatenbank sowie deutsche Normseite in einer schnellen
         Desktop-App für Windows zusammen.
       </p>
       <div class="ctas">
@@ -617,27 +660,57 @@
         <div class="card">
           <div class="icon">📚</div>
           <h3>Binder &amp; Gliederung</h3>
-          <p>Ordner, Dokumente und Recherche in einer flexiblen Baumstruktur organisieren — beliebig verschachtelt und umsortierbar.</p>
+          <p>Ordner, Dokumente und Recherche in einer flexiblen Baumstruktur organisieren — beliebig verschachtelt, einklappbar, per Rechtsklick dupliziert. Gelöschtes landet im Papierkorb und lässt sich zurückholen.</p>
         </div>
         <div class="card">
           <div class="icon">🗂️</div>
           <h3>Corkboard</h3>
-          <p>Dokumente als Karteikarten anordnen, umsortieren und den Überblick über den Plot behalten, bevor der Text steht.</p>
+          <p>Dokumente und Ordner als Karteikarten mit Farbkante, Bild und Status-Fähnchen — den Überblick über den Plot behalten, bevor der Text steht.</p>
+        </div>
+        <div class="card">
+          <div class="icon">🧠</div>
+          <h3>Mindboards <span class="new">Neu</span></h3>
+          <p>Eine unendliche Fläche fürs freie Brainstorming: Notizen verbinden, beschriften und einfärben, Bilder, Personen, Orte und Szenen aufs Board ziehen, alles als PNG exportieren.</p>
         </div>
         <div class="card">
           <div class="icon">📈</div>
           <h3>Zeitstrahl</h3>
-          <p>Handlungsstränge und Ereignisse chronologisch erfassen — auch wenn das Manuskript selbst nicht linear erzählt.</p>
+          <p>Mehrere Handlungsstränge nebeneinander, mit gemeinsamen Slots für „zur selben Zeit“ und gewollten Lücken. Dokumente, Personen und Orte per Drag &amp; Drop an Ereignisse knüpfen.</p>
         </div>
         <div class="card">
           <div class="icon">🧑‍🤝‍🧑</div>
-          <h3>Personen &amp; Orte</h3>
-          <p>Eine durchsuchbare Datenbank für Figuren und Schauplätze, direkt neben dem Manuskript.</p>
+          <h3>Personen, Orte &amp; Planungs-Tags</h3>
+          <p>Eine durchsuchbare Datenbank für Figuren und Schauplätze. Markierten Text per Rechtsklick verlinken — jede Fundstelle im Manuskript bleibt auffindbar.</p>
+        </div>
+        <div class="card">
+          <div class="icon">✒️</div>
+          <h3>Manuskriptseite</h3>
+          <p>Satzbreite, Schrift, Blocksatz, Silbentrennung und Absatzformat mit Abstand oder Erstzeileneinzug. Rechtschreibprüfung in acht Sprachen.</p>
+        </div>
+        <div class="card">
+          <div class="icon">🎯</div>
+          <h3>Fokus- &amp; Fluss-Modus</h3>
+          <p>Ablenkungsfrei schreiben mit Fokus- und Schreibmaschinen-Modus — oder alle Dokumente eines Ordners am Stück lesen und bearbeiten.</p>
+        </div>
+        <div class="card">
+          <div class="icon">🪟</div>
+          <h3>Split-Layouts &amp; Suche</h3>
+          <p>Bis zu vier Bereiche nebeneinander, dazu Schnellsuche und Volltextsuche über das ganze Projekt.</p>
+        </div>
+        <div class="card">
+          <div class="icon">🕰️</div>
+          <h3>Verlauf &amp; Sicherungspunkte</h3>
+          <p>Jede Fassung bleibt erhalten: Verlauf ansehen, Stände vergleichen und einzelne Versionen wiederherstellen — eingebaut, ohne Zusatzsoftware.</p>
         </div>
         <div class="card">
           <div class="icon">📄</div>
-          <h3>Deutsche Normseite</h3>
-          <p>Export nach Normseiten-Konvention für Verlage und Agenturen — daneben flexible Formate für alles andere.</p>
+          <h3>Normseite &amp; Export</h3>
+          <p>Wörter, Zeichen und Normseiten live in der Statusleiste. Export über Formatvorlagen nach DOCX, PDF, ePub, Markdown und TXT.</p>
+        </div>
+        <div class="card">
+          <div class="icon">🎨</div>
+          <h3>Themes &amp; Anpassung</h3>
+          <p>Hell, Dunkel, Sepia, Mitternacht und viele fertige Farbpaletten — oder ein eigenes Theme. Dazu Hintergrundbild und frei belegbare Tastaturkürzel.</p>
         </div>
         <div class="card">
           <div class="icon">🔄</div>
