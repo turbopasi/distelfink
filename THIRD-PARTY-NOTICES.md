@@ -340,44 +340,44 @@ SOFTWARE.
 | @tauri-apps/plugin-opener | 2.5.4 | npm-Paket | MIT OR Apache-2.0 |
 | @tauri-apps/plugin-process | 2.3.1 | npm-Paket | MIT OR Apache-2.0 |
 | @tauri-apps/plugin-updater | 2.10.1 | npm-Paket | MIT OR Apache-2.0 |
-| @tiptap/core | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-blockquote | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-bold | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-bubble-menu | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-bullet-list | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-code | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-code-block | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-document | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-dropcursor | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-floating-menu | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-gapcursor | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-hard-break | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-heading | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-horizontal-rule | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-image | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-italic | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-link | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-list | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-list-item | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-list-keymap | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-ordered-list | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-paragraph | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-strike | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-text | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-text-align | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extension-underline | 3.30.5 | npm-Paket | MIT |
-| @tiptap/extensions | 3.30.5 | npm-Paket | MIT |
-| @tiptap/pm | 3.30.5 | npm-Paket | MIT |
-| @tiptap/react | 3.30.5 | npm-Paket | MIT |
-| @tiptap/starter-kit | 3.30.5 | npm-Paket | MIT |
+| @tiptap/core | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-blockquote | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-bold | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-bubble-menu | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-bullet-list | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-code | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-code-block | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-document | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-dropcursor | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-floating-menu | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-gapcursor | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-hard-break | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-heading | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-horizontal-rule | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-image | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-italic | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-link | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-list | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-list-item | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-list-keymap | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-ordered-list | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-paragraph | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-strike | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-text | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-text-align | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extension-underline | 3.31.3 | npm-Paket | MIT |
+| @tiptap/extensions | 3.31.3 | npm-Paket | MIT |
+| @tiptap/pm | 3.31.3 | npm-Paket | MIT |
+| @tiptap/react | 3.31.3 | npm-Paket | MIT |
+| @tiptap/starter-kit | 3.31.3 | npm-Paket | MIT |
 | @types/linkify-it | 3.0.5 | npm-Paket | MIT |
 | @types/linkify-it | 5.0.0 | npm-Paket | MIT |
 | @types/markdown-it | 13.0.9 | npm-Paket | MIT |
 | @types/markdown-it | 14.2.0 | npm-Paket | MIT |
 | @types/mdurl | 1.0.5 | npm-Paket | MIT |
 | @types/mdurl | 2.0.0 | npm-Paket | MIT |
-| @types/react | 19.2.18 | npm-Paket | MIT |
-| @types/react-dom | 19.2.5 | npm-Paket | MIT |
+| @types/react | 19.3.0 | npm-Paket | MIT |
+| @types/react-dom | 19.3.0 | npm-Paket | MIT |
 | @types/use-sync-external-store | 0.0.6 | npm-Paket | MIT |
 | adler2 | 2.0.1 | Rust-Crate | 0BSD OR MIT OR Apache-2.0 |
 | ahash | 0.8.12 | Rust-Crate | MIT OR Apache-2.0 |
@@ -649,7 +649,7 @@ SOFTWARE.
 | prosemirror-history | 1.5.0 | npm-Paket | MIT |
 | prosemirror-inputrules | 1.5.1 | npm-Paket | MIT |
 | prosemirror-keymap | 1.2.3 | npm-Paket | MIT |
-| prosemirror-markdown | 1.13.6 | npm-Paket | MIT |
+| prosemirror-markdown | 1.13.8 | npm-Paket | MIT |
 | prosemirror-model | 1.25.11 | npm-Paket | MIT |
 | prosemirror-schema-list | 1.5.1 | npm-Paket | MIT |
 | prosemirror-state | 1.4.4 | npm-Paket | MIT |
@@ -663,8 +663,8 @@ SOFTWARE.
 | quick-xml | 0.41.0 | Rust-Crate | MIT |
 | quote | 1.0.47 | Rust-Crate | MIT OR Apache-2.0 |
 | raw-window-handle | 0.6.2 | Rust-Crate | MIT OR Apache-2.0 OR Zlib |
-| react | 19.2.8 | npm-Paket | MIT |
-| react-dom | 19.2.8 | npm-Paket | MIT |
+| react | 19.3.0 | npm-Paket | MIT |
+| react-dom | 19.3.0 | npm-Paket | MIT |
 | ref-cast | 1.0.27 | Rust-Crate | MIT OR Apache-2.0 |
 | ref-cast-impl | 1.0.27 | Rust-Crate | MIT OR Apache-2.0 |
 | regex | 1.13.1 | Rust-Crate | MIT OR Apache-2.0 |
@@ -684,7 +684,7 @@ SOFTWARE.
 | rustls-webpki | 0.103.15 | Rust-Crate | ISC |
 | rusttype | 0.8.3 | Rust-Crate | MIT  OR  Apache-2.0 |
 | same-file | 1.0.6 | Rust-Crate | Unlicense OR MIT |
-| scheduler | 0.27.0 | npm-Paket | MIT |
+| scheduler | 0.28.0 | npm-Paket | MIT |
 | schemars | 0.8.22 | Rust-Crate | MIT |
 | schemars | 0.9.0 | Rust-Crate | MIT |
 | schemars | 1.2.2 | Rust-Crate | MIT |
@@ -1148,36 +1148,36 @@ Creator: Person: Daniel Thompson-Yvetot
 
 Gilt für:
 
-- @tiptap/core 3.30.5 — MIT
-- @tiptap/extension-blockquote 3.30.5 — MIT
-- @tiptap/extension-bold 3.30.5 — MIT
-- @tiptap/extension-bubble-menu 3.30.5 — MIT
-- @tiptap/extension-bullet-list 3.30.5 — MIT
-- @tiptap/extension-code 3.30.5 — MIT
-- @tiptap/extension-code-block 3.30.5 — MIT
-- @tiptap/extension-document 3.30.5 — MIT
-- @tiptap/extension-dropcursor 3.30.5 — MIT
-- @tiptap/extension-floating-menu 3.30.5 — MIT
-- @tiptap/extension-gapcursor 3.30.5 — MIT
-- @tiptap/extension-hard-break 3.30.5 — MIT
-- @tiptap/extension-heading 3.30.5 — MIT
-- @tiptap/extension-horizontal-rule 3.30.5 — MIT
-- @tiptap/extension-image 3.30.5 — MIT
-- @tiptap/extension-italic 3.30.5 — MIT
-- @tiptap/extension-link 3.30.5 — MIT
-- @tiptap/extension-list 3.30.5 — MIT
-- @tiptap/extension-list-item 3.30.5 — MIT
-- @tiptap/extension-list-keymap 3.30.5 — MIT
-- @tiptap/extension-ordered-list 3.30.5 — MIT
-- @tiptap/extension-paragraph 3.30.5 — MIT
-- @tiptap/extension-strike 3.30.5 — MIT
-- @tiptap/extension-text 3.30.5 — MIT
-- @tiptap/extension-text-align 3.30.5 — MIT
-- @tiptap/extension-underline 3.30.5 — MIT
-- @tiptap/extensions 3.30.5 — MIT
-- @tiptap/pm 3.30.5 — MIT
-- @tiptap/react 3.30.5 — MIT
-- @tiptap/starter-kit 3.30.5 — MIT
+- @tiptap/core 3.31.3 — MIT
+- @tiptap/extension-blockquote 3.31.3 — MIT
+- @tiptap/extension-bold 3.31.3 — MIT
+- @tiptap/extension-bubble-menu 3.31.3 — MIT
+- @tiptap/extension-bullet-list 3.31.3 — MIT
+- @tiptap/extension-code 3.31.3 — MIT
+- @tiptap/extension-code-block 3.31.3 — MIT
+- @tiptap/extension-document 3.31.3 — MIT
+- @tiptap/extension-dropcursor 3.31.3 — MIT
+- @tiptap/extension-floating-menu 3.31.3 — MIT
+- @tiptap/extension-gapcursor 3.31.3 — MIT
+- @tiptap/extension-hard-break 3.31.3 — MIT
+- @tiptap/extension-heading 3.31.3 — MIT
+- @tiptap/extension-horizontal-rule 3.31.3 — MIT
+- @tiptap/extension-image 3.31.3 — MIT
+- @tiptap/extension-italic 3.31.3 — MIT
+- @tiptap/extension-link 3.31.3 — MIT
+- @tiptap/extension-list 3.31.3 — MIT
+- @tiptap/extension-list-item 3.31.3 — MIT
+- @tiptap/extension-list-keymap 3.31.3 — MIT
+- @tiptap/extension-ordered-list 3.31.3 — MIT
+- @tiptap/extension-paragraph 3.31.3 — MIT
+- @tiptap/extension-strike 3.31.3 — MIT
+- @tiptap/extension-text 3.31.3 — MIT
+- @tiptap/extension-text-align 3.31.3 — MIT
+- @tiptap/extension-underline 3.31.3 — MIT
+- @tiptap/extensions 3.31.3 — MIT
+- @tiptap/pm 3.31.3 — MIT
+- @tiptap/react 3.31.3 — MIT
+- @tiptap/starter-kit 3.31.3 — MIT
 
 ```text
 MIT License
@@ -1213,8 +1213,8 @@ Gilt für:
 - @types/markdown-it 14.2.0 — MIT
 - @types/mdurl 1.0.5 — MIT
 - @types/mdurl 2.0.0 — MIT
-- @types/react 19.2.18 — MIT
-- @types/react-dom 19.2.5 — MIT
+- @types/react 19.3.0 — MIT
+- @types/react-dom 19.3.0 — MIT
 - @types/use-sync-external-store 0.0.6 — MIT
 
 ```text
@@ -23985,7 +23985,7 @@ Gilt für:
 - prosemirror-history 1.5.0 — MIT
 - prosemirror-inputrules 1.5.1 — MIT
 - prosemirror-keymap 1.2.3 — MIT
-- prosemirror-markdown 1.13.6 — MIT
+- prosemirror-markdown 1.13.8 — MIT
 - prosemirror-model 1.25.11 — MIT
 - prosemirror-schema-list 1.5.1 — MIT
 - prosemirror-state 1.4.4 — MIT
@@ -24573,9 +24573,9 @@ Permission is granted to anyone to use this software for any purpose, including 
 
 Gilt für:
 
-- react 19.2.8 — MIT
-- react-dom 19.2.8 — MIT
-- scheduler 0.27.0 — MIT
+- react 19.3.0 — MIT
+- react-dom 19.3.0 — MIT
+- scheduler 0.28.0 — MIT
 - use-sync-external-store 1.6.0 — MIT
 
 ```text
