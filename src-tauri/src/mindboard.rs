@@ -8,7 +8,7 @@
 //! zeigen können.
 
 use crate::fsutil::write_atomic;
-use crate::project::{make_id, validate_id_pub, with_project, AppState, Saved};
+use crate::project::{make_id, validate_id, with_project, AppState, Saved};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -173,7 +173,7 @@ fn normalize(board: &mut Mindboard) {
 }
 
 fn read_board(p: &crate::project::OpenProject, id: &str) -> Result<Mindboard, String> {
-    validate_id_pub(id)?;
+    validate_id(id)?;
     let raw = fs::read_to_string(p.abs(&rel_path(id)))
         .map_err(|e| format!("Mindboard lesen: {e}"))?;
     let mut board: Mindboard =
@@ -184,7 +184,7 @@ fn read_board(p: &crate::project::OpenProject, id: &str) -> Result<Mindboard, St
 }
 
 fn write_board(p: &mut crate::project::OpenProject, board: &Mindboard) -> Result<(), String> {
-    validate_id_pub(&board.id)?;
+    validate_id(&board.id)?;
     fs::create_dir_all(p.abs(DIR)).map_err(|e| format!("{DIR}/ anlegen: {e}"))?;
     let json =
         serde_json::to_string_pretty(board).map_err(|e| format!("Serialisierung: {e}"))?;
@@ -259,7 +259,7 @@ pub fn save_mindboard(
     state: tauri::State<AppState>,
 ) -> Result<Saved<Mindboard>, String> {
     with_project(&state, |p| {
-        validate_id_pub(&board.id)?;
+        validate_id(&board.id)?;
         if !force && p.changed_externally(&rel_path(&board.id)) {
             return Ok(Saved::Conflict);
         }
@@ -292,7 +292,7 @@ pub fn rename_mindboard(
 #[tauri::command]
 pub fn delete_mindboard(id: String, state: tauri::State<AppState>) -> Result<(), String> {
     with_project(&state, |p| {
-        validate_id_pub(&id)?;
+        validate_id(&id)?;
         let rel = rel_path(&id);
         fs::remove_file(p.abs(&rel)).map_err(|e| format!("{rel} löschen: {e}"))?;
         p.known_mtimes.remove(&rel);

@@ -920,7 +920,7 @@ fn write_pdf(
         for b in &ch.blocks {
             match b {
                 Block::Heading { level, text } => {
-                    let size = base_size + (6 - 2 * (*level).min(3)).max(0);
+                    let size = base_size + (6 - 2 * (*level).min(3));
                     doc.push(
                         Paragraph::new(text.as_str())
                             .styled(Style::new().bold().with_font_size(size))

@@ -40,38 +40,47 @@ function getMd(editor: InstanceType<typeof Editor>): string {
   return (editor.storage as any).markdown.getMarkdown();
 }
 
-// 1) Absatz zentrieren → Markdown ansehen
+let failures = 0;
+function check(name: string, ok: boolean, detail = "") {
+  console.log(`${ok ? "OK  " : "FEHL"} ${name}${ok || !detail ? "" : `\n     ${detail}`}`);
+  if (!ok) failures++;
+}
+
+/** "typ:ausrichtung" je Block, z. B. "paragraph:center" oder "heading:-". */
+const alignsOf = (editor: InstanceType<typeof Editor>) =>
+  (editor.getJSON().content ?? [])
+    .map((n: any) => `${n.type}:${n.attrs?.textAlign ?? "-"}`)
+    .join(",");
+
+// 1) Absatz zentrieren → Markdown mit Ausrichtungs-Wrapper
 const e1 = makeEditor("Erster Absatz\n\nZweiter **fetter** Absatz\n\nDritter Absatz");
 e1.commands.setTextSelection(20);
 e1.commands.setTextAlign("center");
 const md1 = getMd(e1);
-console.log("--- serialisiert ---");
-console.log(JSON.stringify(md1));
+check("zentriert serialisiert", md1.includes("text-align: center"), JSON.stringify(md1));
 
-// 2) Roundtrip: Markdown neu laden → Ausrichtung noch da?
+// 2) Roundtrip: Markdown neu laden → Ausrichtung nur am zweiten Absatz
 const e2 = makeEditor(md1);
-const json = e2.getJSON();
-const aligns = (json.content ?? []).map(
-  (n: any) => `${n.type}:${n.attrs?.textAlign ?? "-"}:${n.content?.[0]?.text?.slice(0, 12) ?? ""}`,
+check(
+  "Ausrichtung nach Reload",
+  alignsOf(e2) === "paragraph:-,paragraph:center,paragraph:-",
+  alignsOf(e2),
 );
-console.log("--- nach Reload ---");
-console.log(aligns.join("\n"));
+check("Auszeichnung bleibt", JSON.stringify(e2.getJSON()).includes('"bold"'));
 
 // 3) Zweite Serialisierung muss stabil sein (kein Drift)
 const md2 = getMd(e2);
-console.log("--- stabil? ---");
-console.log(md1 === md2 ? "JA" : `NEIN:\n${JSON.stringify(md2)}`);
+check("stabil", md1 === md2, JSON.stringify(md2));
 
 // 4) Explizites "linksbündig" muss überleben (relevant bei Blocksatz-Grundeinstellung)
 const e5 = makeEditor("Absatz eins\n\nAbsatz zwei");
 e5.commands.setTextSelection(3);
 e5.commands.setTextAlign("left");
 const md5 = getMd(e5);
-const e6 = makeEditor(md5);
-const left = (e6.getJSON().content ?? [])[0] as any;
-console.log("--- explizit links ---");
-console.log(
-  md5.includes('text-align: left') && left.attrs?.textAlign === "left" ? "JA" : `NEIN: ${JSON.stringify(md5)}`,
+check(
+  "explizit links",
+  md5.includes("text-align: left") && alignsOf(makeEditor(md5)) === "paragraph:left,paragraph:-",
+  JSON.stringify(md5),
 );
 
 // 5) Überschrift rechtsbündig
@@ -79,11 +88,12 @@ const e3 = makeEditor("## Titel\n\nText");
 e3.commands.setTextSelection(3);
 e3.commands.setTextAlign("right");
 const md3 = getMd(e3);
-console.log("--- Überschrift ---");
-console.log(JSON.stringify(md3));
-const e4 = makeEditor(md3);
-console.log(
-  (e4.getJSON().content ?? [])
-    .map((n: any) => `${n.type}:${n.attrs?.textAlign ?? "-"}`)
-    .join(", "),
+const headingAligns = alignsOf(makeEditor(md3));
+check(
+  "Überschrift rechts",
+  headingAligns === "heading:right,paragraph:-",
+  `${JSON.stringify(md3)} → ${headingAligns}`,
 );
+
+console.log(failures === 0 ? "\nAlle Tests bestanden." : `\n${failures} Test(s) fehlgeschlagen.`);
+process.exit(failures === 0 ? 0 : 1);

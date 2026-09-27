@@ -66,11 +66,8 @@ check(
 const md2 = getMd(e2);
 check("stabil", md1 === md2, JSON.stringify(md2));
 
-// 4) Orte und Notizen ebenso
-for (const [kind, id] of [
-  ["location", "dunkler-wald-9c11ab"],
-  ["note", "regelwerk-magie-77aa10"],
-] as const) {
+// 4) Orte ebenso (Notizen gibt es seit 0.12 nicht mehr)
+for (const [kind, id] of [["location", "dunkler-wald-9c11ab"]] as const) {
   const e = makeEditor("Dort war es still.");
   e.commands.setTextSelection({ from: 1, to: 5 }); // "Dort"
   e.commands.setMark("planTag", { kind, id });

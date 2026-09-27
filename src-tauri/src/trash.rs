@@ -2,7 +2,7 @@
 //!
 //! Gelöschte Dateien wandern nach `.trash/`. Die Datei allein reicht aber
 //! nicht, um etwas zurückzuholen: Titel, Ordner und Platz im Baum stehen in
-//! `project.json` bzw. `notes/_index.json`, und die werden beim Löschen ohne
+//! `project.json`, und die wird beim Löschen ohne
 //! den Eintrag neu geschrieben. Deshalb hält `.trash/_index.json` fest, was
 //! ein Eintrag war und wohin er gehört.
 //!
@@ -50,7 +50,7 @@ pub struct TrashItem {
     /// Ordner, in dem der Knoten lag (None = oberste Ebene).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
-    /// Platz unter den Geschwistern bzw. im Notiz-Index.
+    /// Platz unter den Geschwistern.
     #[serde(default)]
     pub index: usize,
 }
@@ -125,7 +125,7 @@ pub fn list_trash(state: tauri::State<AppState>) -> Result<Vec<TrashItem>, Strin
     with_project(&state, |p| {
         let mut items = load_index(p);
         // Zuletzt Gelöschtes zuerst — danach sucht man.
-        items.sort_by(|a, b| b.deleted_at.cmp(&a.deleted_at));
+        items.sort_by_key(|i| std::cmp::Reverse(i.deleted_at));
         Ok(items)
     })
 }

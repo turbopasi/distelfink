@@ -1,13 +1,14 @@
-//! Recherche-Module (Phase 4): Personen-/Orte-Datenbank, Notizen, Zeitstrahl.
+//! Recherche-Module (Phase 4): Personen-/Orte-Datenbank, Planungs-Tags, Zeitstrahl.
 //!
 //! Personen/Orte: eine JSON-Datei pro Eintrag in `characters/` bzw. `locations/`.
 //! Zeitstrahl: `timeline.json` (Reihenfolge = Array-Reihenfolge).
 
 use crate::project::{
-    detached_project, make_id, validate_id_pub, with_project, AppState, Saved, WriteResult,
+    detached_project, make_id, validate_id, with_project, AppState, Saved, WriteResult,
 };
 use crate::fsutil::write_atomic;
 use crate::trash;
+use crate::images;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -81,7 +82,7 @@ pub fn list_entities(kind: String, state: tauri::State<AppState>) -> Result<Vec<
                 Err(e) => return Err(format!("{} ungültig: {e}", path.display())),
             }
         }
-        out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        out.sort_by_key(|e| e.name.to_lowercase());
         Ok(out)
     })
 }
@@ -100,7 +101,7 @@ pub fn save_entity(
         if entity.id.is_empty() {
             entity.id = make_id(&entity.name);
         } else {
-            validate_id_pub(&entity.id)?;
+            validate_id(&entity.id)?;
         }
         fs::create_dir_all(p.abs(dir)).map_err(|e| format!("{dir} anlegen: {e}"))?;
         let rel = entity_rel_path(dir, &entity.id);
@@ -121,7 +122,7 @@ pub fn duplicate_entity(
     state: tauri::State<AppState>,
 ) -> Result<Entity, String> {
     let dir = entity_dir(&kind)?;
-    validate_id_pub(&id)?;
+    validate_id(&id)?;
     with_project(&state, |p| {
         let rel = entity_rel_path(dir, &id);
         let raw = fs::read_to_string(p.abs(&rel)).map_err(|e| format!("{rel} lesen: {e}"))?;
@@ -164,7 +165,7 @@ pub fn delete_entity(
     state: tauri::State<AppState>,
 ) -> Result<(), String> {
     let dir = entity_dir(&kind)?;
-    validate_id_pub(&id)?;
+    validate_id(&id)?;
     with_project(&state, |p| {
         let rel = entity_rel_path(dir, &id);
         // Der Name steht in der JSON-Datei; ohne ihn hieße der Eintrag im
@@ -213,7 +214,7 @@ pub fn update_entity_meta(
     state: tauri::State<AppState>,
 ) -> Result<Entity, String> {
     let dir = entity_dir(&kind)?;
-    validate_id_pub(&id)?;
+    validate_id(&id)?;
     with_project(&state, |p| {
         let rel = entity_rel_path(dir, &id);
         let raw = fs::read_to_string(p.abs(&rel)).map_err(|e| format!("{rel} lesen: {e}"))?;
@@ -247,7 +248,7 @@ pub fn read_entity_doc(
     state: tauri::State<AppState>,
 ) -> Result<String, String> {
     let dir = entity_dir(&kind)?;
-    validate_id_pub(&id)?;
+    validate_id(&id)?;
     with_project(&state, |p| {
         let rel = entity_doc_rel(dir, &id);
         let path = p.abs(&rel);
@@ -296,7 +297,7 @@ pub fn write_entity_doc(
     state: tauri::State<AppState>,
 ) -> Result<WriteResult, String> {
     let dir = entity_dir(&kind)?;
-    validate_id_pub(&id)?;
+    validate_id(&id)?;
     with_project(&state, |p| {
         let rel = entity_doc_rel(dir, &id);
         let path = p.abs(&rel);
@@ -319,15 +320,8 @@ pub fn set_entity_image(
     state: tauri::State<AppState>,
 ) -> Result<Entity, String> {
     let dir = entity_dir(&kind)?;
-    validate_id_pub(&id)?;
-    let ext = std::path::Path::new(&source_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase())
-        .ok_or("Datei hat keine Endung")?;
-    if !["png", "jpg", "jpeg", "gif", "webp"].contains(&ext.as_str()) {
-        return Err(format!("Nicht unterstütztes Bildformat: .{ext}"));
-    }
+    validate_id(&id)?;
+    let ext = images::image_ext_of(&source_path)?;
     with_project(&state, |p| {
         let rel = entity_rel_path(dir, &id);
         let raw = fs::read_to_string(p.abs(&rel)).map_err(|e| format!("{rel} lesen: {e}"))?;
@@ -355,7 +349,7 @@ pub fn get_entity_image(
     state: tauri::State<AppState>,
 ) -> Result<Option<String>, String> {
     let dir = entity_dir(&kind)?;
-    validate_id_pub(&id)?;
+    validate_id(&id)?;
     with_project(&state, |p| {
         let rel = entity_rel_path(dir, &id);
         let raw = match fs::read_to_string(p.abs(&rel)) {
@@ -367,35 +361,22 @@ pub fn get_entity_image(
         let Some(image) = entity.image else {
             return Ok(None);
         };
+        // Der Name stammt aus einer Projektdatei — nur Dateien direkt im
+        // Ordner des Eintrags, nichts außerhalb des Projekts.
+        if image.contains(['/', '\\']) || image.contains("..") {
+            return Err(format!("Ungültiger Bildname: {image}"));
+        }
         let bytes = match fs::read(p.abs(dir).join(&image)) {
             Ok(b) => b,
             Err(_) => return Ok(None),
         };
-        let mime = match image.rsplit('.').next().unwrap_or("") {
-            "jpg" | "jpeg" => "image/jpeg",
-            "gif" => "image/gif",
-            "webp" => "image/webp",
-            _ => "image/png",
-        };
-        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-        Ok(Some(format!("data:{mime};base64,{b64}")))
+        Ok(Some(images::data_url(&bytes, &images::ext_lower(&image))))
     })
 }
 
 // ---------------------------------------------------------------------------
 // Dokument-Bilder (inline in Szenen und Recherche-Dokumenten)
 // ---------------------------------------------------------------------------
-
-const IMAGE_EXTS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
-
-fn image_mime(ext: &str) -> &'static str {
-    match ext {
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        _ => "image/png",
-    }
-}
 
 /// Speichert ein eingefügtes Bild (z. B. Screenshot aus der Zwischenablage)
 /// unter `images/` und liefert den projektrelativen Pfad fürs Markdown.
@@ -406,7 +387,7 @@ pub fn save_doc_image(
     state: tauri::State<AppState>,
 ) -> Result<String, String> {
     let ext = ext.to_lowercase();
-    if !IMAGE_EXTS.contains(&ext.as_str()) {
+    if !images::is_image_ext(&ext) {
         return Err(format!("Nicht unterstütztes Bildformat: .{ext}"));
     }
     let bytes = base64::engine::general_purpose::STANDARD
@@ -428,14 +409,7 @@ pub fn import_doc_image(
     source_path: String,
     state: tauri::State<AppState>,
 ) -> Result<String, String> {
-    let ext = std::path::Path::new(&source_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase())
-        .ok_or("Datei hat keine Endung")?;
-    if !IMAGE_EXTS.contains(&ext.as_str()) {
-        return Err(format!("Nicht unterstütztes Bildformat: .{ext}"));
-    }
+    let ext = images::image_ext_of(&source_path)?;
     with_project(&state, |p| {
         fs::create_dir_all(p.abs("images")).map_err(|e| format!("images anlegen: {e}"))?;
         let id = make_id("bild");
@@ -454,8 +428,8 @@ pub fn read_doc_image(
     if !rel.starts_with("images/") || rel.contains("..") || rel.contains('\\') {
         return Err(format!("Ungültiger Bildpfad: {rel}"));
     }
-    let ext = rel.rsplit('.').next().unwrap_or("").to_lowercase();
-    if !IMAGE_EXTS.contains(&ext.as_str()) {
+    let ext = images::ext_lower(&rel);
+    if !images::is_image_ext(&ext) {
         return Err(format!("Ungültiger Bildpfad: {rel}"));
     }
     with_project(&state, |p| {
@@ -463,8 +437,7 @@ pub fn read_doc_image(
             Ok(b) => b,
             Err(_) => return Ok(None),
         };
-        let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-        Ok(Some(format!("data:{};base64,{b64}", image_mime(&ext))))
+        Ok(Some(images::data_url(&bytes, &ext)))
     })
 }
 
@@ -591,16 +564,7 @@ fn collect_mentions(
     }
 }
 
-fn collect_scene_titles(nodes: &[crate::project::BinderNode], out: &mut Vec<(String, String)>) {
-    for n in nodes {
-        if matches!(n.kind, crate::project::NodeKind::Scene) {
-            out.push((n.id.clone(), n.title.clone()));
-        }
-        collect_scene_titles(&n.children, out);
-    }
-}
-
-/// Alle Fundstellen eines Planungs-Tags — in Szenen, Notizen und den
+/// Alle Fundstellen eines Planungs-Tags — in Szenen und den
 /// Dokumenten anderer Personen/Orte.
 #[tauri::command(async)]
 pub fn list_mentions(
@@ -611,14 +575,12 @@ pub fn list_mentions(
     if !is_tag_kind(&tag_kind) {
         return Err(format!("Unbekannte Tag-Art: {tag_kind}"));
     }
-    validate_id_pub(&id)?;
+    validate_id(&id)?;
     // Liest alle Texte des Projekts — ohne den Lock zu halten.
     let p = &detached_project(&state)?;
     let mut out = Vec::new();
 
-    let mut scenes = Vec::new();
-    collect_scene_titles(&p.meta.binder, &mut scenes);
-    for (scene_id, title) in scenes {
+    for (scene_id, title) in crate::project::scene_titles(&p.meta.binder) {
         let Ok(text) = fs::read_to_string(p.abs(&crate::project::scene_rel_path(&scene_id)))
         else {
             continue;

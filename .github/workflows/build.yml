@@ -46,6 +46,18 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # Vor dem teuren Build: die Roundtrip-Tests des Editors (Markdown,
+      # Ausrichtung, Planungs-Tags, Mindboard-Modell).
+      - name: Frontend tests
+        run: npm test
+
+      # Einmal reicht — die Rust-Logik ist plattformunabhängig, und jeder
+      # Testlauf kompiliert das Backend ein zweites Mal (Debug-Profil).
+      - name: Rust tests
+        if: matrix.platform == 'ubuntu-22.04'
+        working-directory: src-tauri
+        run: cargo test
+
       # Die Schlüssel sind nötig, weil `createUpdaterArtifacts` aktiv ist: Tauri
       # bricht ab, wenn ein öffentlicher Schlüssel konfiguriert ist, aber kein
       # privater zum Signieren bereitsteht.

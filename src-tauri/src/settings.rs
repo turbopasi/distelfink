@@ -6,7 +6,7 @@
 //! gehören dem Frontend (`src/settings.ts`), damit neue Optionen keine
 //! Rust-Änderung brauchen.
 
-use base64::Engine;
+use crate::images;
 use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
@@ -48,17 +48,6 @@ pub fn save_settings(app: tauri::AppHandle, settings: serde_json::Value) -> Resu
 // Dateiname; die Anzeige holt sich das Bild als data-URL (wie die
 // Dokument-Bilder — vermeidet Asset-Protocol-Scopes).
 
-const IMAGE_EXTS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
-
-fn image_mime(ext: &str) -> &'static str {
-    match ext {
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        _ => "image/png",
-    }
-}
-
 fn background_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
@@ -79,8 +68,7 @@ fn background_file(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String
     {
         return Err(format!("Ungültiger Bildname: {name}"));
     }
-    let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
-    if !IMAGE_EXTS.contains(&ext.as_str()) {
+    if !images::is_image_ext(&images::ext_lower(name)) {
         return Err(format!("Ungültiger Bildname: {name}"));
     }
     Ok(background_dir(app)?.join(name))
@@ -91,14 +79,7 @@ fn background_file(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String
 /// immer nur eines.
 #[tauri::command]
 pub fn import_background_image(app: tauri::AppHandle, source_path: String) -> Result<String, String> {
-    let ext = std::path::Path::new(&source_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_lowercase())
-        .ok_or("Datei hat keine Endung")?;
-    if !IMAGE_EXTS.contains(&ext.as_str()) {
-        return Err(format!("Nicht unterstütztes Bildformat: .{ext}"));
-    }
+    let ext = images::image_ext_of(&source_path)?;
     let dir = background_dir(&app)?;
     // Zeitstempel im Namen: so lädt die Anzeige nach einem Wechsel garantiert
     // das neue Bild und nicht den zwischengespeicherten Vorgänger.
@@ -116,13 +97,11 @@ pub fn import_background_image(app: tauri::AppHandle, source_path: String) -> Re
 #[tauri::command]
 pub fn read_background_image(app: tauri::AppHandle, name: String) -> Result<Option<String>, String> {
     let path = background_file(&app, &name)?;
-    let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
     let bytes = match fs::read(&path) {
         Ok(b) => b,
         Err(_) => return Ok(None),
     };
-    let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
-    Ok(Some(format!("data:{};base64,{b64}", image_mime(&ext))))
+    Ok(Some(images::data_url(&bytes, &images::ext_lower(&name))))
 }
 
 /// Entfernt das gespeicherte Hintergrundbild wieder.

@@ -152,7 +152,7 @@ pub(crate) fn mtime_ms(path: &Path) -> Option<u64> {
 
 /// IDs sind slug + Zufallssuffix; nur [a-z0-9-] — schützt zugleich vor
 /// Pfad-Traversal, da IDs direkt Dateinamen bilden.
-fn validate_id(id: &str) -> Result<(), String> {
+pub(crate) fn validate_id(id: &str) -> Result<(), String> {
     if !id.is_empty()
         && id.len() <= 64
         && id
@@ -192,10 +192,6 @@ pub(crate) fn make_id(title: &str) -> String {
     } else {
         format!("{}-{suffix}", slug.trim_end_matches('-'))
     }
-}
-
-pub(crate) fn validate_id_pub(id: &str) -> Result<(), String> {
-    validate_id(id)
 }
 
 pub(crate) fn scene_rel_path(id: &str) -> String {
@@ -255,25 +251,44 @@ fn clone_subtree(node: &BinderNode, scene_copies: &mut Vec<(String, String)>) ->
     clone
 }
 
-/// Hängt `node` direkt hinter das Geschwisterkind `after_id`. Wird `after_id`
-/// nicht gefunden, kommt der Node unverbraucht zurück (`Err`).
-fn insert_after(
-    nodes: &mut Vec<BinderNode>,
-    after_id: &str,
-    node: BinderNode,
-) -> Result<(), BinderNode> {
-    if let Some(pos) = nodes.iter().position(|n| n.id == after_id) {
-        nodes.insert(pos + 1, node);
-        return Ok(());
+/// Die Geschwisterliste unter `parent_id` (None = oberste Ebene).
+fn children_of<'a>(
+    binder: &'a mut Vec<BinderNode>,
+    parent_id: Option<&str>,
+) -> Option<&'a mut Vec<BinderNode>> {
+    match parent_id {
+        None => Some(binder),
+        Some(pid) => find_node_mut(binder, pid).map(|n| &mut n.children),
     }
-    let mut node = node;
-    for n in nodes.iter_mut() {
-        match insert_after(&mut n.children, after_id, node) {
-            Ok(()) => return Ok(()),
-            Err(back) => node = back,
+}
+
+/// Szenen-IDs samt Titel in Binder-Reihenfolge (Suche, Fundstellen).
+pub(crate) fn scene_titles(nodes: &[BinderNode]) -> Vec<(String, String)> {
+    fn walk(nodes: &[BinderNode], out: &mut Vec<(String, String)>) {
+        for n in nodes {
+            if n.kind == NodeKind::Scene {
+                out.push((n.id.clone(), n.title.clone()));
+            }
+            walk(&n.children, out);
         }
     }
-    Err(node)
+    let mut out = Vec::new();
+    walk(nodes, &mut out);
+    out
+}
+
+/// Projektname als Ordnername: ohne Zeichen, die Windows in Dateinamen verbietet.
+fn project_folder_name(name: &str) -> Result<String, String> {
+    let safe: String = name
+        .chars()
+        .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+        .collect::<String>()
+        .trim()
+        .to_string();
+    if safe.is_empty() {
+        return Err("Projektname ist leer".into());
+    }
+    Ok(safe)
 }
 
 pub(crate) fn collect_scene_ids(node: &BinderNode, out: &mut Vec<String>) {
@@ -462,15 +477,7 @@ pub fn create_project(
     author: String,
     state: tauri::State<AppState>,
 ) -> Result<ProjectInfo, String> {
-    let safe_name: String = name
-        .chars()
-        .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-        .collect::<String>()
-        .trim()
-        .to_string();
-    if safe_name.is_empty() {
-        return Err("Projektname ist leer".into());
-    }
+    let safe_name = project_folder_name(&name)?;
     let root = Path::new(&parent_dir).join(format!("{safe_name}.autorproj"));
     if root.exists() {
         return Err(format!("Ordner existiert bereits: {}", root.display()));
@@ -577,15 +584,7 @@ pub fn save_project_as(
     name: String,
     state: tauri::State<AppState>,
 ) -> Result<ProjectInfo, String> {
-    let safe_name: String = name
-        .chars()
-        .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
-        .collect::<String>()
-        .trim()
-        .to_string();
-    if safe_name.is_empty() {
-        return Err("Projektname ist leer".into());
-    }
+    let safe_name = project_folder_name(&name)?;
     let target = Path::new(&parent_dir).join(format!("{safe_name}.autorproj"));
     if target.exists() {
         return Err(format!("Ordner existiert bereits: {}", target.display()));
@@ -678,23 +677,20 @@ pub fn create_node(
     state: tauri::State<AppState>,
 ) -> Result<ProjectInfo, String> {
     with_binder(&state, |p| {
+        // Erst den Ordner prüfen — sonst bliebe bei einem Fehler eine
+        // Szenendatei ohne Binder-Eintrag zurück.
+        if let Some(pid) = &parent_id {
+            find_node(&p.meta.binder, pid).ok_or(format!("Parent nicht gefunden: {pid}"))?;
+        }
         let id = make_id(&title);
         if kind == NodeKind::Scene {
-            fs::write(p.abs(&scene_rel_path(&id)), "")
-                .map_err(|e| format!("Szenendatei anlegen: {e}"))?;
             let rel = scene_rel_path(&id);
-            if let Some(mt) = mtime_ms(&p.abs(&rel)) {
-                p.known_mtimes.insert(rel, mt);
-            }
+            fs::write(p.abs(&rel), "").map_err(|e| format!("Szenendatei anlegen: {e}"))?;
+            p.note_mtime(&rel);
         }
-        let node = BinderNode::new(id, kind, title);
-        match parent_id {
-            Some(pid) => find_node_mut(&mut p.meta.binder, &pid)
-                .ok_or(format!("Parent nicht gefunden: {pid}"))?
-                .children
-                .push(node),
-            None => p.meta.binder.push(node),
-        }
+        children_of(&mut p.meta.binder, parent_id.as_deref())
+            .ok_or("Parent nicht gefunden")?
+            .push(BinderNode::new(id, kind, title));
         p.write_meta()?;
         Ok(p.info())
     })
@@ -723,21 +719,18 @@ pub fn move_node(
     state: tauri::State<AppState>,
 ) -> Result<ProjectInfo, String> {
     with_binder(&state, |p| {
+        // Alles prüfen, bevor der Knoten aus dem Baum genommen wird — ein
+        // Fehler danach ließe ihn verschwinden.
         if let Some(pid) = &new_parent_id {
             if *pid == id || is_descendant(&p.meta.binder, &id, pid) {
                 return Err("Node kann nicht in sich selbst verschoben werden".into());
             }
+            find_node(&p.meta.binder, pid).ok_or(format!("Parent nicht gefunden: {pid}"))?;
         }
         let node =
             remove_node(&mut p.meta.binder, &id).ok_or(format!("Node nicht gefunden: {id}"))?;
-        let target = match &new_parent_id {
-            Some(pid) => {
-                &mut find_node_mut(&mut p.meta.binder, pid)
-                    .ok_or(format!("Parent nicht gefunden: {pid}"))?
-                    .children
-            }
-            None => &mut p.meta.binder,
-        };
+        let target = children_of(&mut p.meta.binder, new_parent_id.as_deref())
+            .ok_or("Parent nicht gefunden")?;
         target.insert(index.min(target.len()), node);
         p.write_meta()?;
         Ok(p.info())
@@ -813,8 +806,11 @@ pub fn duplicate_node(id: String, state: tauri::State<AppState>) -> Result<Proje
             p.note_mtime(&rel);
         }
 
-        insert_after(&mut p.meta.binder, &id, clone)
-            .map_err(|_| format!("Node nicht gefunden: {id}"))?;
+        let (parent_id, index) = parent_and_index(&p.meta.binder, &id)
+            .ok_or(format!("Node nicht gefunden: {id}"))?;
+        children_of(&mut p.meta.binder, parent_id.as_deref())
+            .ok_or(format!("Node nicht gefunden: {id}"))?
+            .insert(index + 1, clone);
         p.write_meta()?;
         p.search_dirty = true;
         Ok(p.info())
@@ -890,10 +886,8 @@ pub(crate) fn restore_binder_node(
     parent_id: Option<&str>,
     index: usize,
 ) -> Result<(), String> {
-    let siblings = match parent_id.and_then(|pid| find_node_mut(&mut p.meta.binder, pid)) {
-        Some(parent) => &mut parent.children,
-        None => &mut p.meta.binder,
-    };
+    let parent_id = parent_id.filter(|pid| find_node(&p.meta.binder, pid).is_some());
+    let siblings = children_of(&mut p.meta.binder, parent_id).ok_or("Ordner nicht gefunden")?;
     siblings.insert(index.min(siblings.len()), node);
     p.write_meta()
 }

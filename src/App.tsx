@@ -382,43 +382,25 @@ function PaneView({ paneId }: { paneId: PaneId }) {
   const isActive = useStore((s) => s.activePane === paneId && s.layoutMode !== "single");
   const setActivePane = useStore((s) => s.setActivePane);
 
-  if (trash) {
+  // Auflagen in fester Vorrangfolge; Editor und Recherche bringen ihren
+  // eigenen Rahmen mit.
+  const module = trash ? (
+    <TrashPanel />
+  ) : timeline ? (
+    <TimelinePanel />
+  ) : mindboardId ? (
+    <MindboardPanel key={mindboardId} boardId={mindboardId} paneId={paneId} />
+  ) : corkboardId ? (
+    <Corkboard chapterId={corkboardId} />
+  ) : null;
+
+  if (module) {
     return (
       <section
         className={`editor ${isActive ? "pane-active" : ""}`}
         onMouseDownCapture={() => setActivePane(paneId)}
       >
-        <TrashPanel />
-      </section>
-    );
-  }
-  if (timeline) {
-    return (
-      <section
-        className={`editor ${isActive ? "pane-active" : ""}`}
-        onMouseDownCapture={() => setActivePane(paneId)}
-      >
-        <TimelinePanel />
-      </section>
-    );
-  }
-  if (mindboardId) {
-    return (
-      <section
-        className={`editor ${isActive ? "pane-active" : ""}`}
-        onMouseDownCapture={() => setActivePane(paneId)}
-      >
-        <MindboardPanel key={mindboardId} boardId={mindboardId} paneId={paneId} />
-      </section>
-    );
-  }
-  if (corkboardId) {
-    return (
-      <section
-        className={`editor ${isActive ? "pane-active" : ""}`}
-        onMouseDownCapture={() => setActivePane(paneId)}
-      >
-        <Corkboard chapterId={corkboardId} />
+        {module}
       </section>
     );
   }

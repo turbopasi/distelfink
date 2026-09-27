@@ -4,7 +4,9 @@
 //! (fehlend, korrupt oder veraltet) komplett aus den Klartextdateien neu
 //! aufgebaut und gehört weder in Git noch in den Sync.
 
-use crate::project::{catch_panic, scene_rel_path, with_project, AppState, BinderNode, OpenProject};
+use crate::project::{
+    catch_panic, scene_rel_path, scene_titles, with_project, AppState, OpenProject,
+};
 use rusqlite::Connection;
 use serde::Serialize;
 use std::fs;
@@ -23,15 +25,6 @@ pub struct SearchHit {
     pub title: String,
     /// Fundstellen-Ausschnitt mit <b>-Markierung.
     pub snippet: String,
-}
-
-fn collect_scene_titles(nodes: &[BinderNode], out: &mut Vec<(String, String)>) {
-    for n in nodes {
-        if matches!(n.kind, crate::project::NodeKind::Scene) {
-            out.push((n.id.clone(), n.title.clone()));
-        }
-        collect_scene_titles(&n.children, out);
-    }
 }
 
 /// Baut den FTS-Index vollständig neu auf — in einer einzigen Transaktion.
@@ -60,9 +53,7 @@ fn fill_index(p: &OpenProject, conn: &Connection) -> Result<(), String> {
         .map_err(err)?;
 
     // Szenen: Titel aus dem Binder, Inhalt aus manuscript/<id>.md
-    let mut titles = Vec::new();
-    collect_scene_titles(&p.meta.binder, &mut titles);
-    for (id, title) in titles {
+    for (id, title) in scene_titles(&p.meta.binder) {
         let body = fs::read_to_string(p.abs(&scene_rel_path(&id))).unwrap_or_default();
         insert.execute(("scene", &id, &title, &body)).map_err(err)?;
     }
