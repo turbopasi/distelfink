@@ -367,6 +367,16 @@ impl OpenProject {
         }
     }
 
+    /// Kopie für Arbeiten außerhalb des Locks (siehe `detached_project`).
+    pub(crate) fn detached(&self) -> OpenProject {
+        OpenProject {
+            root: self.root.clone(),
+            meta: self.meta.clone(),
+            known_mtimes: HashMap::new(),
+            search_dirty: self.search_dirty,
+        }
+    }
+
     pub(crate) fn info(&self) -> ProjectInfo {
         ProjectInfo {
             root: self.root.to_string_lossy().into_owned(),
@@ -382,6 +392,27 @@ pub(crate) fn with_project<T>(
     let mut guard = state.lock();
     let project = guard.as_mut().ok_or("Kein Projekt geöffnet")?;
     f(project)
+}
+
+/// Kopie des offenen Projekts für längere, nur lesende Arbeiten (Export,
+/// Suchindex, Fundstellen, Git). Der Lock ist danach sofort wieder frei —
+/// sonst stünde während eines PDF-Exports jedes Speichern still.
+pub(crate) fn detached_project(state: &tauri::State<AppState>) -> Result<OpenProject, String> {
+    with_project(state, |p| Ok(p.detached()))
+}
+
+/// Führt eine längere Arbeit aus und macht aus einem Panic einen Fehler. Die
+/// schweren Commands laufen asynchron; ein Panic dort bliebe sonst ein
+/// Promise, das nie antwortet — die Oberfläche wartete ewig.
+pub(crate) fn catch_panic<T>(what: &str, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|panic| {
+        let detail = panic
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| panic.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        Err(format!("{what} ist unerwartet abgebrochen. {detail}").trim_end().to_string())
+    })
 }
 
 /// Wie `with_project`, für Änderungen am Binder: übernimmt vorher externe
@@ -423,7 +454,7 @@ fn remove_stale_tmp_files(root: &Path) {
 // Commands: Projekt-Lebenszyklus
 // ---------------------------------------------------------------------------
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_project(
     parent_dir: String,
     name: String,
@@ -486,7 +517,7 @@ pub fn create_project(
     Ok(info)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_project(path: String, state: tauri::State<AppState>) -> Result<ProjectInfo, String> {
     let root = PathBuf::from(&path);
     if !root.join(PROJECT_FILE).is_file() {
@@ -540,7 +571,7 @@ fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
 /// „Speichern unter": legt eine vollstaendige Kopie des offenen Projekts an und
 /// arbeitet ab sofort in der Kopie weiter — das Original bleibt auf dem Stand,
 /// den es beim Kopieren hatte. Die Oberflaeche schreibt vorher alles Offene raus.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn save_project_as(
     parent_dir: String,
     name: String,

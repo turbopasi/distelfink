@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api, sceneRelPath } from "./api";
 import { clearPlanTagAvatars } from "./components/planTagInfo";
+import { clearImageCache } from "./imageCache";
 import {
   applySettings,
   defaultSettings,
@@ -117,6 +118,25 @@ const autosaveTimers: Record<PaneId, ReturnType<typeof setTimeout> | null> = {
   rightBottom: null,
 };
 
+/** Liefert den aktuellen Editorinhalt eines Bereichs als Markdown. Der Editor
+ *  meldet sich hier an; `pane.content` wird erst beim Speichern nachgezogen —
+ *  das ganze Dokument bei jedem Tastendruck zu serialisieren, bremst lange
+ *  Kapitel im Fluss spürbar aus. */
+const contentSources: Record<PaneId, (() => string) | null> = {
+  leftTop: null,
+  leftBottom: null,
+  rightTop: null,
+  rightBottom: null,
+};
+
+/** Änderungen je Bereich — zeigt, ob während des Speicherns weitergetippt wurde. */
+const editCounts: Record<PaneId, number> = {
+  leftTop: 0,
+  leftBottom: 0,
+  rightTop: 0,
+  rightBottom: 0,
+};
+
 /** Laufender Schreibvorgang je Bereich — `flushPane` wartet ihn ab. */
 const savesInFlight: Record<PaneId, Promise<void> | null> = {
   leftTop: null,
@@ -210,7 +230,9 @@ interface Store {
   touchTrash: () => void;
   /** Holt einen Eintrag aus dem Papierkorb zurück. */
   restoreFromTrash: (key: string) => Promise<void>;
-  setContent: (paneId: PaneId, content: string) => void;
+  /** Der Editor eines Bereichs wurde geändert. Serialisiert wird erst beim
+   *  Speichern (siehe `registerContentSource`), nicht bei jedem Tastendruck. */
+  markDirty: (paneId: PaneId) => void;
   flushPane: (paneId: PaneId) => Promise<void>;
   flushAll: () => Promise<void>;
   /** Alles Offene sichern, bevor die App endet (Fenster schließen, Update):
@@ -355,12 +377,22 @@ export const useStore = create<Store>((set, get) => {
     }
   };
 
+  /** Zieht `pane.content` auf den Stand des Editors nach. */
+  const syncContent = (paneId: PaneId) => {
+    const source = contentSources[paneId];
+    if (!source) return;
+    const content = source();
+    if (content !== get().panes[paneId].content) patchPane(paneId, { content });
+  };
+
   /** Speichert die einzelne Szene eines Bereichs. */
   const flushSingle = async (paneId: PaneId) => {
+    syncContent(paneId);
     const pane = get().panes[paneId];
     const sceneId = pane.sceneId;
     if (!sceneId) return;
     const written = pane.content;
+    const edits = editCounts[paneId];
     patchPane(paneId, { saveState: "saving" });
     try {
       const result = await api.writeScene(sceneId, written);
@@ -369,8 +401,7 @@ export const useStore = create<Store>((set, get) => {
       } else {
         cacheSceneStats(sceneId, written);
         // Nur "saved", wenn währenddessen nicht weitergetippt wurde.
-        const now = get().panes[paneId];
-        patchPane(paneId, { saveState: now.content === written ? "saved" : "dirty" });
+        patchPane(paneId, { saveState: editCounts[paneId] === edits ? "saved" : "dirty" });
       }
     } catch (e) {
       patchPane(paneId, { saveState: "dirty" });
@@ -380,8 +411,10 @@ export const useStore = create<Store>((set, get) => {
 
   /** Speichert einen Fluss: jede geänderte Szene wandert in ihre eigene Datei. */
   const flushFlow = async (paneId: PaneId) => {
+    syncContent(paneId);
     const pane = get().panes[paneId];
     const written = pane.content;
+    const edits = editCounts[paneId];
     const parts = splitFlow(written, pane.flowIds);
     if (!parts.length) {
       // Ohne Trenner ist nicht mehr zuzuordnen, wohin der Text gehört.
@@ -410,10 +443,9 @@ export const useStore = create<Store>((set, get) => {
       fail(e);
       return;
     }
-    const now = get().panes[paneId];
     patchPane(paneId, {
       flowSaved: saved,
-      saveState: conflict ? "conflict" : now.content === written ? "saved" : "dirty",
+      saveState: conflict ? "conflict" : editCounts[paneId] === edits ? "saved" : "dirty",
     });
   };
 
@@ -469,6 +501,7 @@ export const useStore = create<Store>((set, get) => {
   };
 
   const resetView = (project: ProjectInfo | null) => {
+    clearImageCache();
     set({
       project,
       panes: emptyPanes(),
@@ -669,8 +702,13 @@ export const useStore = create<Store>((set, get) => {
       }
     },
 
-    setContent: (paneId, content) => {
-      patchPane(paneId, { content, saveState: "dirty" });
+    markDirty: (paneId) => {
+      editCounts[paneId]++;
+      // Nur beim Wechsel ins Store schreiben — jeder Tastendruck ein Update
+      // hieße jedes Mal ein neues Rendern aller Abonnenten. Ein offener
+      // Konflikt bleibt stehen, bis er entschieden ist.
+      const state = get().panes[paneId].saveState;
+      if (state === "saved" || state === "saving") patchPane(paneId, { saveState: "dirty" });
       scheduleAutosave(paneId);
     },
 
@@ -711,6 +749,7 @@ export const useStore = create<Store>((set, get) => {
     },
 
     resolveConflict: async (paneId, action) => {
+      syncContent(paneId);
       const pane = get().panes[paneId];
       if (!pane.sceneId) return;
       if (pane.flowIds.length) {
@@ -1101,3 +1140,28 @@ export const useStore = create<Store>((set, get) => {
     },
   };
 });
+
+/** Meldet den Editor eines Bereichs als Quelle seines Inhalts an (siehe
+ *  `contentSources`). Die zurückgegebene Funktion meldet ihn wieder ab und
+ *  übernimmt dabei ungespeicherte Änderungen nach `pane.content` — so gehen sie
+ *  nicht verloren, wenn der Editor verschwindet, bevor gespeichert wurde. */
+export function registerContentSource(paneId: PaneId, source: () => string): () => void {
+  contentSources[paneId] = source;
+  const loadCounter = useStore.getState().panes[paneId].loadCounter;
+  return () => {
+    if (contentSources[paneId] !== source) return;
+    contentSources[paneId] = null;
+    const pane = useStore.getState().panes[paneId];
+    // Nur, wenn der Bereich noch dasselbe Dokument zeigt: nach einem Neuladen
+    // gehört `pane.content` schon dem neuen Stand.
+    if (pane.loadCounter !== loadCounter || pane.saveState !== "dirty") return;
+    try {
+      const content = source();
+      useStore.setState((s) => ({
+        panes: { ...s.panes, [paneId]: { ...s.panes[paneId], content } },
+      }));
+    } catch (e) {
+      console.error("Editorinhalt nicht übernommen:", e);
+    }
+  };
+}

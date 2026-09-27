@@ -1,8 +1,8 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { useStore, type PaneId } from "../store";
+import { registerContentSource, useStore, type PaneId } from "../store";
 import {
   addStats,
   computeStats,
@@ -108,7 +108,7 @@ function EditorInstance({
   paneId: PaneId;
   initialContent: string;
 }) {
-  const setContent = useStore((s) => s.setContent);
+  const markDirty = useStore((s) => s.markDirty);
 
   const editor = useEditor({
     // SceneBreak nur hier: eigenständige Dokumente (Personen, Orte) kennen
@@ -122,7 +122,7 @@ function EditorInstance({
     // getippt wird (z. B. Umbenennen im Binder). Stattdessen unten manuell
     // und mit Rücksicht darauf fokussieren.
     onUpdate: ({ editor }) => {
-      setContent(paneId, getMarkdown(editor));
+      markDirty(paneId);
       if (useStore.getState().typewriter) centerCaret(editor);
     },
     onSelectionUpdate: ({ editor }) => {
@@ -131,6 +131,12 @@ function EditorInstance({
   });
 
   useEditorLanguage(editor);
+
+  // Markdown erst beim Speichern erzeugen statt bei jedem Tastendruck.
+  useEffect(() => {
+    if (!editor) return;
+    return registerContentSource(paneId, () => getMarkdown(editor));
+  }, [editor, paneId]);
 
   const typewriter = useStore((s) => s.typewriter);
   const focusScene = useStore((s) => s.panes[paneId].sceneId);
@@ -184,6 +190,19 @@ function EditorInstance({
 /** tiptap-markdown liefert keine Storage-Typen für sein Editor-Storage-Feld. */
 export function getMarkdown(editor: Editor): string {
   return (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown();
+}
+
+/** Verzögerung, mit der die Statusleiste nach dem Tippen nachzählt. */
+const STATS_DELAY_MS = 300;
+
+/** `value`, aber erst, wenn es sich `ms` lang nicht geändert hat. */
+function useDebouncedValue<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return settled;
 }
 
 function centerCaret(editor: Editor) {
@@ -336,20 +355,31 @@ function StatusBar({ editor, paneId }: { editor: Editor; paneId: PaneId }) {
   const toggleFlowMode = useStore((s) => s.toggleFlowMode);
   const flowIds = useStore((s) => s.panes[paneId].flowIds);
 
-  const text = useEditorState({
+  // Die Zählung läuft über das ganze Dokument — also erst, wenn eine Weile
+  // nicht getippt wurde, und nicht bei jeder Cursorbewegung.
+  const doc = useEditorState({
     editor,
-    selector: ({ editor }) =>
-      editor.state.doc
-        .textBetween(0, editor.state.doc.content.size, "\n", "\n")
+    selector: ({ editor }) => editor.state.doc,
+    equalityFn: Object.is,
+  });
+  const settledDoc = useDebouncedValue(doc, STATS_DELAY_MS);
+  const text = useMemo(
+    () =>
+      settledDoc
+        .textBetween(0, settledDoc.content.size, "\n", "\n")
         // Leerzeilen (u. a. die Szenentrenner) sind keine Absätze.
         .split("\n")
         .filter((line) => line.trim())
         .join("\n"),
-  });
+    [settledDoc],
+  );
   // Szene, in der der Cursor steht — im Fluss Bezug für Verlauf und Titel.
+  // Außerhalb des Flusses gibt es keine Trenner; dann gar nicht erst suchen.
+  const inFlow = flowIds.length > 0;
   const caretSceneId = useEditorState({
     editor,
     selector: ({ editor }) => {
+      if (!inFlow) return null;
       const { from } = editor.state.selection;
       let id: string | null = null;
       editor.state.doc.forEach((node, offset) => {

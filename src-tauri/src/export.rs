@@ -14,7 +14,10 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
-use crate::project::{scene_rel_path, with_project, AppState, BinderNode, NodeKind, OpenProject};
+use crate::project::{
+    catch_panic, detached_project, scene_rel_path, with_project, AppState, BinderNode, NodeKind,
+    OpenProject,
+};
 
 pub const TEMPLATES_FILE: &str = "export-templates.json";
 
@@ -990,7 +993,7 @@ impl ExportFormat {
 /// Exportiert die ausgewählten Binder-Teile in `out_path`.
 /// Die Vorlage kommt komplett vom Frontend — so wirken auch ungespeicherte
 /// Anpassungen aus dem Export-Dialog.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn export_project(
     format: ExportFormat,
     template: ExportTemplate,
@@ -998,7 +1001,8 @@ pub fn export_project(
     out_path: String,
     state: tauri::State<AppState>,
 ) -> Result<String, String> {
-    with_project(&state, |p| {
+    let p = &detached_project(&state)?;
+    catch_panic("Der Export", || {
         let include: HashSet<String> = include_ids.into_iter().collect();
         let chapters = compile_chapters(p, &include, &template)?;
         let title = p.meta.title.clone();

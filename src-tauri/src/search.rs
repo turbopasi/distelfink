@@ -4,10 +4,15 @@
 //! (fehlend, korrupt oder veraltet) komplett aus den Klartextdateien neu
 //! aufgebaut und gehört weder in Git noch in den Sync.
 
-use crate::project::{scene_rel_path, with_project, AppState, BinderNode};
+use crate::project::{catch_panic, scene_rel_path, with_project, AppState, BinderNode, OpenProject};
 use rusqlite::Connection;
 use serde::Serialize;
 use std::fs;
+use std::sync::Mutex;
+
+/// Zwei Suchen kurz hintereinander (Tippen im Suchfeld) teilen sich eine
+/// Indexdatei — ohne diese Sperre bauten sie sie gleichzeitig neu auf.
+static SEARCH_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,11 +34,17 @@ fn collect_scene_titles(nodes: &[BinderNode], out: &mut Vec<(String, String)>) {
     }
 }
 
-/// Baut den FTS-Index vollständig neu auf.
-fn rebuild_index(
-    p: &crate::project::OpenProject,
-    conn: &Connection,
-) -> Result<(), String> {
+/// Baut den FTS-Index vollständig neu auf — in einer einzigen Transaktion.
+/// Ohne sie schriebe SQLite jede Zeile einzeln fest, jede mit eigenem Sync auf
+/// die Platte; bei ein paar hundert Szenen dauerte das Sekunden.
+fn rebuild_index(p: &OpenProject, conn: &Connection) -> Result<(), String> {
+    let err = |e: rusqlite::Error| format!("Suchindex: {e}");
+    let tx = conn.unchecked_transaction().map_err(err)?;
+    fill_index(p, &tx)?;
+    tx.commit().map_err(err)
+}
+
+fn fill_index(p: &OpenProject, conn: &Connection) -> Result<(), String> {
     let err = |e: rusqlite::Error| format!("Suchindex: {e}");
     conn.execute_batch(
         "DROP TABLE IF EXISTS docs;
@@ -129,17 +140,25 @@ fn build_fts_query(query: &str) -> String {
         .join(" ")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn search_project(
     query: String,
     state: tauri::State<AppState>,
 ) -> Result<Vec<SearchHit>, String> {
-    with_project(&state, |p| {
-        let fts_query = build_fts_query(&query);
-        if fts_query.is_empty() {
-            return Ok(Vec::new());
-        }
+    let fts_query = build_fts_query(&query);
+    if fts_query.is_empty() {
+        return Ok(Vec::new());
+    }
+    let _search = SEARCH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    // Den Aufbau-Bedarf übernehmen und gleich zurücksetzen: was während des
+    // Aufbaus gespeichert wird, setzt ihn wieder und löst den nächsten aus.
+    let p = &with_project(&state, |p| {
+        let detached = p.detached();
+        p.search_dirty = false;
+        Ok(detached)
+    })?;
 
+    let result = catch_panic("Die Suche", || {
         let cache_dir = p.abs(".cache");
         fs::create_dir_all(&cache_dir).map_err(|e| format!(".cache anlegen: {e}"))?;
         let db_path = cache_dir.join("index.sqlite");
@@ -155,16 +174,13 @@ pub fn search_project(
             )
             .unwrap_or(false);
 
-        if p.search_dirty || !table_exists {
-            if rebuild_index(p, &conn).is_err() {
-                // Cache evtl. korrupt → Datei verwerfen und einmal neu versuchen.
-                drop(conn);
-                let _ = fs::remove_file(&db_path);
-                conn = Connection::open(&db_path)
-                    .map_err(|e| format!("Suchindex neu anlegen: {e}"))?;
-                rebuild_index(p, &conn)?;
-            }
-            p.search_dirty = false;
+        let needs_rebuild = p.search_dirty || !table_exists;
+        if needs_rebuild && rebuild_index(p, &conn).is_err() {
+            // Cache evtl. korrupt → Datei verwerfen und einmal neu versuchen.
+            drop(conn);
+            let _ = fs::remove_file(&db_path);
+            conn = Connection::open(&db_path).map_err(|e| format!("Suchindex neu anlegen: {e}"))?;
+            rebuild_index(p, &conn)?;
         }
 
         let mut stmt = conn
@@ -187,5 +203,14 @@ pub fn search_project(
             .filter_map(|r| r.ok())
             .collect();
         Ok(hits)
-    })
+    });
+    if result.is_err() {
+        // Der Index ist womöglich nicht (vollständig) aufgebaut — beim
+        // nächsten Mal von vorn.
+        let _ = with_project(&state, |p| {
+            p.search_dirty = true;
+            Ok(())
+        });
+    }
+    result
 }

@@ -12,9 +12,7 @@ import {
 import type { EditorView } from "@tiptap/pm/view";
 import { api } from "../api";
 import { useStore } from "../store";
-
-/** rel-Pfad → data-URL, einmal pro Sitzung geladen. */
-const imageCache = new Map<string, string>();
+import { cacheImage, getCachedImage } from "../imageCache";
 
 function isExternal(src: string) {
   return src.startsWith("data:") || src.startsWith("http");
@@ -23,7 +21,7 @@ function isExternal(src: string) {
 /** Löst einen projektrelativen Bildpfad ("images/…") als data-URL auf. */
 export function useDocImage(src: string | null | undefined): string | null {
   const [resolved, setResolved] = useState<string | null>(() =>
-    !src ? null : isExternal(src) ? src : (imageCache.get(src) ?? null),
+    !src ? null : isExternal(src) ? src : (getCachedImage(src) ?? null),
   );
 
   useEffect(() => {
@@ -35,7 +33,7 @@ export function useDocImage(src: string | null | undefined): string | null {
       setResolved(src);
       return;
     }
-    const hit = imageCache.get(src);
+    const hit = getCachedImage(src);
     if (hit) {
       setResolved(hit);
       return;
@@ -45,7 +43,7 @@ export function useDocImage(src: string | null | undefined): string | null {
     void api
       .readDocImage(src)
       .then((url) => {
-        if (url) imageCache.set(src, url);
+        if (url) cacheImage(src, url);
         if (alive) setResolved(url);
       })
       .catch(() => {});

@@ -3,7 +3,7 @@
 // flusht beim Unmount — unabhängig von der Pane-Speicherlogik der Szenen.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { extraFlushers, useStore, type PaneId } from "../store";
 import { docExtensions, getMarkdown, Toolbar, useEditorLanguage } from "./RichEditor";
 import { imagePasteHandler } from "./DocImage";
@@ -70,11 +70,13 @@ function DocEditorInstance({
 }) {
   const [status, setStatusState] = useState<Status>("saved");
   // Refs, weil Timer, Unmount und `flushAll` den Stand außerhalb des Renderns
-  // brauchen: `latest` ist der Editorinhalt, `saved` der zuletzt geschriebene.
+  // brauchen. Markdown entsteht erst beim Speichern, nicht bei jedem
+  // Tastendruck: `edits` zählt die Änderungen, `savedEdits` den gesicherten Stand.
   const statusRef = useRef<Status>("saved");
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latest = useRef(initialContent);
-  const saved = useRef(initialContent);
+  const editorRef = useRef<Editor | null>(null);
+  const edits = useRef(0);
+  const savedEdits = useRef(0);
   const inFlight = useRef<Promise<void> | null>(null);
 
   const setStatus = (next: Status) => {
@@ -90,9 +92,11 @@ function DocEditorInstance({
     // Nie zwei Schreibvorgänge gleichzeitig: ein laufender könnte sonst nach
     // dem neueren fertig werden und dessen Stand als „gespeichert“ melden.
     while (inFlight.current) await inFlight.current;
-    if (statusRef.current === "conflict" || latest.current === saved.current) return;
+    const editor = editorRef.current;
+    if (!editor || statusRef.current === "conflict" || edits.current === savedEdits.current) return;
 
-    const content = latest.current;
+    const seq = edits.current;
+    const content = getMarkdown(editor);
     const run = (async () => {
       try {
         const result = await write(content);
@@ -100,9 +104,9 @@ function DocEditorInstance({
           setStatus("conflict");
           return;
         }
-        saved.current = content;
+        savedEdits.current = seq;
         // Wurde währenddessen weitergetippt, ist der Stand noch nicht gesichert.
-        setStatus(latest.current === content ? "saved" : "dirty");
+        setStatus(edits.current === seq ? "saved" : "dirty");
       } catch (e) {
         useStore.setState({ error: String(e) });
       }
@@ -134,16 +138,17 @@ function DocEditorInstance({
     extensions: docExtensions(),
     editorProps: { handlePaste: imagePasteHandler },
     content: initialContent,
-    onUpdate: ({ editor }) => {
-      latest.current = getMarkdown(editor);
+    onUpdate: () => {
+      edits.current++;
       // Ein offener Konflikt bleibt sichtbar, bis er entschieden ist.
-      if (statusRef.current !== "conflict") setStatus("dirty");
+      if (statusRef.current === "saved") setStatus("dirty");
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => void flushRef.current(), AUTOSAVE_MS);
     },
     onBlur: () => void flushRef.current(),
   });
 
+  editorRef.current = editor;
   useEditorLanguage(editor);
 
   if (!editor) return null;
@@ -158,9 +163,8 @@ function DocEditorInstance({
               try {
                 const c = await read();
                 if (timer.current) clearTimeout(timer.current);
-                latest.current = c;
-                saved.current = c;
                 editor.commands.setContent(c, { emitUpdate: false });
+                savedEdits.current = edits.current;
                 setStatus("saved");
               } catch (e) {
                 useStore.setState({ error: String(e) });
@@ -171,14 +175,14 @@ function DocEditorInstance({
           </button>
           <button
             onClick={async () => {
-              const content = latest.current;
-              const result = await write(content, true).catch((e) => {
+              const seq = edits.current;
+              const result = await write(getMarkdown(editor), true).catch((e) => {
                 useStore.setState({ error: String(e) });
                 return null;
               });
               if (!result) return;
-              saved.current = content;
-              setStatus(latest.current === content ? "saved" : "dirty");
+              savedEdits.current = seq;
+              setStatus(edits.current === seq ? "saved" : "dirty");
             }}
           >
             Eigene Version behalten (extern überschreiben)

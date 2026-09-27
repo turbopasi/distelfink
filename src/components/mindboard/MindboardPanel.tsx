@@ -8,9 +8,12 @@ import { extraFlushers, useStore, type PaneId } from "../../store";
 import type { MindView, Mindboard } from "../../types";
 import { BoardCanvas } from "./BoardCanvas";
 import { History } from "./model";
+import { loadView, storeView } from "./viewMemory";
 import "./mindboard.css";
 
 const SAVE_DELAY_MS = 400;
+/** Die Ansicht wird beim Verschieben/Zoomen laufend gemeldet — seltener merken. */
+const VIEW_DELAY_MS = 300;
 
 export interface UpdateOptions {
   /** false = kein Schritt im Verlauf (Zwischenstände beim Ziehen). */
@@ -27,6 +30,8 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
   const [, setHistoryTick] = useState(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const version = useStore((s) => s.mindboardVersion);
+  const root = useStore((s) => s.project?.root ?? "");
+  const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [name, setName] = useState("");
 
   // Solange die Konfliktfrage offen ist, wartet jedes weitere Speichern auf
@@ -41,23 +46,21 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
     if (conflictOpen.current) return conflictOpen.current;
     const current = boardRef.current;
     if (!current) return;
-    const withView = () => {
-      const b = boardRef.current ?? current;
-      return { ...b, view: viewRef.current ?? b.view };
-    };
-    const result = await api.saveMindboard(withView());
+    // Die Ansicht lebt in viewMemory, nicht in der Datei (auch eine alte
+    // `view` aus früheren Versionen verschwindet so beim nächsten Speichern).
+    const latest = () => ({ ...(boardRef.current ?? current), view: null });
+    const result = await api.saveMindboard(latest());
     if (result.status === "ok") return;
 
     conflictOpen.current = (async () => {
       if (await askLoadExternal(`Das Mindboard „${current.name}“`)) {
         const fresh = await api.loadMindboard(boardId);
         boardRef.current = fresh;
-        viewRef.current = fresh.view ?? viewRef.current;
         historyRef.current = new History<Mindboard>();
         setBoard(fresh);
         setHistoryTick((t) => t + 1);
       } else {
-        await api.saveMindboard(withView(), true);
+        await api.saveMindboard(latest(), true);
       }
     })().finally(() => {
       conflictOpen.current = null;
@@ -79,7 +82,10 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
       .then((b) => {
         if (!alive) return;
         boardRef.current = b;
-        viewRef.current = b.view ?? null;
+        const remembered = loadView(root, boardId);
+        viewRef.current = remembered ?? b.view ?? null;
+        // Boards aus früheren Versionen tragen die Ansicht noch in der Datei.
+        if (!remembered && b.view) storeView(root, boardId, b.view);
         setBoard(b);
         setName(b.name);
       })
@@ -87,6 +93,8 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
     return () => {
       alive = false;
     };
+    // root wechselt nie, solange das Board offen ist (Projektwechsel schließt es).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boardId]);
 
   // Name folgt dem Umbenennen in der Seitenleiste.
@@ -115,8 +123,12 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
       extraFlushers.delete(flush);
       // Gelöschte Boards lehnt das Backend ab — das ist hier kein Fehler.
       void flush();
+      if (viewTimer.current) {
+        clearTimeout(viewTimer.current);
+        if (viewRef.current) storeView(root, boardId, viewRef.current);
+      }
     };
-  }, [save]);
+  }, [save, root, boardId]);
 
   const update = useCallback(
     (next: Mindboard, opts: UpdateOptions = {}) => {
@@ -136,9 +148,13 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
   const onViewChange = useCallback(
     (view: MindView) => {
       viewRef.current = view;
-      scheduleSave();
+      if (viewTimer.current) clearTimeout(viewTimer.current);
+      viewTimer.current = setTimeout(() => {
+        viewTimer.current = null;
+        storeView(root, boardId, view);
+      }, VIEW_DELAY_MS);
     },
-    [scheduleSave],
+    [root, boardId],
   );
 
   const step = useCallback(

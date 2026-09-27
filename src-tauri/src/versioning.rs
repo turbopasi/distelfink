@@ -15,11 +15,22 @@ use git2::{IndexAddOption, Oid, Repository, Signature, Sort};
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 
-use crate::project::{with_project, AppState};
+use crate::project::{detached_project, with_project, AppState};
 
 /// Obergrenze für die Verlaufsliste einer Datei.
 const MAX_HISTORY: usize = 300;
+
+/// Schreibende Git-Zugriffe nacheinander: ein automatischer und ein manueller
+/// Sicherungspunkt gleichzeitig stolperten sonst über Gits `index.lock`.
+/// Reihenfolge der Sperren: erst diese, dann (kurz) der Projekt-Lock — nie
+/// umgekehrt, sonst droht ein Deadlock.
+static GIT_LOCK: Mutex<()> = Mutex::new(());
+
+fn git_lock() -> MutexGuard<'static, ()> {
+    GIT_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -87,6 +98,7 @@ fn commit_all(repo: &Repository, author: &str, message: &str) -> Result<bool, St
 /// nachziehen (ältere Projekte) und den aktuellen Stand als Basis committen.
 pub(crate) fn ensure_repo(root: &Path, author: &str, message: &str) -> Result<(), String> {
     ensure_gitignore(root)?;
+    let _git = git_lock();
     let repo = open_or_init(root)?;
     commit_all(&repo, author, message)?;
     Ok(())
@@ -168,97 +180,100 @@ fn version_content(repo: &Repository, commit_id: &str, rel: &str) -> Result<Stri
 
 /// Setzt einen Sicherungspunkt über das ganze Projekt. Ohne `message` als
 /// automatischer Sicherungspunkt. Rückgabe: ob es etwas zu sichern gab.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn snapshot(message: Option<String>, state: tauri::State<AppState>) -> Result<bool, String> {
-    with_project(&state, |p| {
-        let repo = open_or_init(&p.root)?;
-        let msg = message
-            .filter(|m| !m.trim().is_empty())
-            .unwrap_or_else(|| "Automatischer Sicherungspunkt".into());
-        commit_all(&repo, &p.meta.author, &msg)
-    })
+    // Committet ohne den Projekt-Lock: Speichern läuft währenddessen weiter.
+    let p = detached_project(&state)?;
+    let msg = message
+        .filter(|m| !m.trim().is_empty())
+        .unwrap_or_else(|| "Automatischer Sicherungspunkt".into());
+    let _git = git_lock();
+    let repo = open_or_init(&p.root)?;
+    commit_all(&repo, &p.meta.author, &msg)
 }
 
 /// Alle Versionen einer Datei (neueste zuerst): nur Commits, in denen sich
 /// ihr Inhalt gegenüber dem Vorgänger geändert hat.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_history(rel: String, state: tauri::State<AppState>) -> Result<Vec<VersionInfo>, String> {
     validate_rel(&rel)?;
-    with_project(&state, |p| {
-        let repo = open_or_init(&p.root)?;
-        let mut walk = match repo.revwalk() {
-            Ok(w) => w,
-            Err(_) => return Ok(Vec::new()),
-        };
-        if walk.push_head().is_err() {
-            return Ok(Vec::new()); // Repo noch ohne Commits
-        }
-        let _ = walk.set_sorting(Sort::TIME);
+    let p = detached_project(&state)?;
+    let repo = open_or_init(&p.root)?;
+    let mut walk = match repo.revwalk() {
+        Ok(w) => w,
+        Err(_) => return Ok(Vec::new()),
+    };
+    if walk.push_head().is_err() {
+        return Ok(Vec::new()); // Repo noch ohne Commits
+    }
+    let _ = walk.set_sorting(Sort::TIME);
 
-        let mut versions = Vec::new();
-        for oid in walk {
-            let Ok(oid) = oid else { continue };
-            let Ok(commit) = repo.find_commit(oid) else { continue };
-            let id = blob_id_at(&commit, &rel);
-            let parent_id = commit.parent(0).ok().and_then(|par| blob_id_at(&par, &rel));
-            if id.is_some() && id != parent_id {
-                versions.push(VersionInfo {
-                    commit_id: oid.to_string(),
-                    timestamp_ms: commit.time().seconds() * 1000,
-                    message: commit.message().unwrap_or("").trim().to_string(),
-                });
-                if versions.len() >= MAX_HISTORY {
-                    break;
-                }
+    let mut versions = Vec::new();
+    for oid in walk {
+        let Ok(oid) = oid else { continue };
+        let Ok(commit) = repo.find_commit(oid) else { continue };
+        let id = blob_id_at(&commit, &rel);
+        let parent_id = commit.parent(0).ok().and_then(|par| blob_id_at(&par, &rel));
+        if id.is_some() && id != parent_id {
+            versions.push(VersionInfo {
+                commit_id: oid.to_string(),
+                timestamp_ms: commit.time().seconds() * 1000,
+                message: commit.message().unwrap_or("").trim().to_string(),
+            });
+            if versions.len() >= MAX_HISTORY {
+                break;
             }
         }
-        Ok(versions)
-    })
+    }
+    Ok(versions)
 }
 
 /// Inhalt der Datei `rel` zum Zeitpunkt des Commits `commit_id`.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_version(
     commit_id: String,
     rel: String,
     state: tauri::State<AppState>,
 ) -> Result<String, String> {
     validate_rel(&rel)?;
-    with_project(&state, |p| {
-        let repo = open_or_init(&p.root)?;
-        version_content(&repo, &commit_id, &rel)
-    })
+    let p = detached_project(&state)?;
+    let repo = open_or_init(&p.root)?;
+    version_content(&repo, &commit_id, &rel)
 }
 
 /// Stellt eine frühere Version wieder her. Vorher wird der aktuelle Stand
 /// gesichert (nichts geht verloren), danach die Wiederherstellung committet.
 /// Rückgabe: der wiederhergestellte Inhalt (fürs Neuladen im Editor).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_version(
     commit_id: String,
     rel: String,
     state: tauri::State<AppState>,
 ) -> Result<String, String> {
     validate_rel(&rel)?;
-    with_project(&state, |p| {
-        let author = p.meta.author.clone();
-        let repo = open_or_init(&p.root)?;
-        commit_all(&repo, &author, "Sicherungspunkt vor Wiederherstellung")?;
+    let p = detached_project(&state)?;
+    let author = &p.meta.author;
+    let _git = git_lock();
+    let repo = open_or_init(&p.root)?;
+    commit_all(&repo, author, "Sicherungspunkt vor Wiederherstellung")?;
 
-        let content = version_content(&repo, &commit_id, &rel)?;
-        crate::fsutil::write_atomic(&p.abs(&rel), &content)
+    let content = version_content(&repo, &commit_id, &rel)?;
+    // Nur das Zurückschreiben braucht den Projekt-Lock (bekannte mtime).
+    with_project(&state, |live| {
+        crate::fsutil::write_atomic(&live.abs(&rel), &content)
             .map_err(|e| format!("Wiederherstellen ({rel}): {e}"))?;
-        p.note_mtime(&rel);
-        p.search_dirty = true;
+        live.note_mtime(&rel);
+        live.search_dirty = true;
+        Ok(())
+    })?;
 
-        let oid = Oid::from_str(&commit_id).unwrap_or_else(|_| Oid::zero());
-        let stamp = repo
-            .find_commit(oid)
-            .ok()
-            .and_then(|c| chrono::DateTime::from_timestamp(c.time().seconds(), 0))
-            .map(|d| d.with_timezone(&chrono::Local).format("%d.%m.%Y %H:%M").to_string())
-            .unwrap_or_else(|| commit_id.chars().take(7).collect());
-        commit_all(&repo, &author, &format!("Wiederhergestellt: {rel} (Stand vom {stamp})"))?;
-        Ok(content)
-    })
+    let oid = Oid::from_str(&commit_id).unwrap_or_else(|_| Oid::zero());
+    let stamp = repo
+        .find_commit(oid)
+        .ok()
+        .and_then(|c| chrono::DateTime::from_timestamp(c.time().seconds(), 0))
+        .map(|d| d.with_timezone(&chrono::Local).format("%d.%m.%Y %H:%M").to_string())
+        .unwrap_or_else(|| commit_id.chars().take(7).collect());
+    commit_all(&repo, author, &format!("Wiederhergestellt: {rel} (Stand vom {stamp})"))?;
+    Ok(content)
 }

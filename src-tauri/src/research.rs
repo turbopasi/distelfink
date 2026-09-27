@@ -4,7 +4,7 @@
 //! Zeitstrahl: `timeline.json` (Reihenfolge = Array-Reihenfolge).
 
 use crate::project::{
-    make_id, validate_id_pub, with_project, AppState, Saved, WriteResult,
+    detached_project, make_id, validate_id_pub, with_project, AppState, Saved, WriteResult,
 };
 use crate::fsutil::write_atomic;
 use crate::trash;
@@ -602,7 +602,7 @@ fn collect_scene_titles(nodes: &[crate::project::BinderNode], out: &mut Vec<(Str
 
 /// Alle Fundstellen eines Planungs-Tags — in Szenen, Notizen und den
 /// Dokumenten anderer Personen/Orte.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_mentions(
     tag_kind: String,
     id: String,
@@ -612,51 +612,51 @@ pub fn list_mentions(
         return Err(format!("Unbekannte Tag-Art: {tag_kind}"));
     }
     validate_id_pub(&id)?;
-    with_project(&state, |p| {
-        let mut out = Vec::new();
+    // Liest alle Texte des Projekts — ohne den Lock zu halten.
+    let p = &detached_project(&state)?;
+    let mut out = Vec::new();
 
-        let mut scenes = Vec::new();
-        collect_scene_titles(&p.meta.binder, &mut scenes);
-        for (scene_id, title) in scenes {
-            let Ok(text) = fs::read_to_string(p.abs(&crate::project::scene_rel_path(&scene_id)))
-            else {
-                continue;
-            };
-            collect_mentions(&text, &tag_kind, &id, "scene", &scene_id, &title, &mut out);
-        }
+    let mut scenes = Vec::new();
+    collect_scene_titles(&p.meta.binder, &mut scenes);
+    for (scene_id, title) in scenes {
+        let Ok(text) = fs::read_to_string(p.abs(&crate::project::scene_rel_path(&scene_id)))
+        else {
+            continue;
+        };
+        collect_mentions(&text, &tag_kind, &id, "scene", &scene_id, &title, &mut out);
+    }
 
-        for (source, dir) in [("character", "characters"), ("location", "locations")] {
-            let Ok(entries) = fs::read_dir(p.abs(dir)) else {
+    for (source, dir) in [("character", "characters"), ("location", "locations")] {
+        let Ok(entries) = fs::read_dir(p.abs(dir)) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
                 continue;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                    continue;
-                }
-                let Ok(raw) = fs::read_to_string(&path) else {
-                    continue;
-                };
-                let Ok(entity) = serde_json::from_str::<Entity>(&raw) else {
-                    continue;
-                };
-                let Ok(text) = fs::read_to_string(p.abs(&entity_doc_rel(dir, &entity.id))) else {
-                    continue;
-                };
-                collect_mentions(
-                    &text,
-                    &tag_kind,
-                    &id,
-                    source,
-                    &entity.id,
-                    &entity.name,
-                    &mut out,
-                );
             }
+            let Ok(raw) = fs::read_to_string(&path) else {
+                continue;
+            };
+            let Ok(entity) = serde_json::from_str::<Entity>(&raw) else {
+                continue;
+            };
+            let Ok(text) = fs::read_to_string(p.abs(&entity_doc_rel(dir, &entity.id))) else {
+                continue;
+            };
+            collect_mentions(
+                &text,
+                &tag_kind,
+                &id,
+                source,
+                &entity.id,
+                &entity.name,
+                &mut out,
+            );
         }
+    }
 
-        Ok(out)
-    })
+    Ok(out)
 }
 
 #[cfg(test)]
