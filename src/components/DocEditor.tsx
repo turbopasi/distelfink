@@ -45,7 +45,7 @@ export function DocEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docKey]);
 
-  if (content === null) return <div className="doc-editor" />;
+  if (content === null) return <DocEditorFrame />;
   return (
     <DocEditorInstance
       key={docKey}
@@ -54,6 +54,23 @@ export function DocEditor({
       read={read}
       write={write}
     />
+  );
+}
+
+/** Rahmen ohne Inhalt, solange Text oder Editor noch nicht da sind:
+ *  Werkzeugleiste (gesperrt), leere Seite, Statusleiste. Sonst blitzt beim
+ *  Dokumentwechsel kurz der blanke Hintergrund auf. */
+function DocEditorFrame() {
+  return (
+    <div className="doc-editor" aria-busy="true">
+      <Toolbar editor={null} />
+      <div className="editor-content doc-editor-content">
+        <div className="ProseMirror" />
+      </div>
+      <footer className="statusbar">
+        <span>Gespeichert</span>
+      </footer>
+    </div>
   );
 }
 
@@ -151,7 +168,7 @@ function DocEditorInstance({
   editorRef.current = editor;
   useEditorLanguage(editor);
 
-  if (!editor) return null;
+  if (!editor) return <DocEditorFrame />;
 
   return (
     <div className="doc-editor">

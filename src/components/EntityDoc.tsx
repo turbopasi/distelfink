@@ -11,6 +11,11 @@ import { SceneLinks } from "./SceneLinks";
 import type { Entity, EntityKind } from "../types";
 import { Icon } from "./Icon";
 
+/** Bild pro Eintrag ("kind:id" → data-URL oder null), einmal pro Sitzung
+ *  geladen: das Original geht sonst bei jedem Wechsel erneut als base64 über
+ *  die IPC und verzögert das Anzeigen des Dokuments. */
+const imageCache = new Map<string, string | null>();
+
 export function EntityDoc({
   kind,
   entity,
@@ -25,18 +30,21 @@ export function EntityDoc({
   const touchResearch = useStore((s) => s.touchResearch);
   const [name, setName] = useState(entity.name);
   const [sceneIds, setSceneIds] = useState<string[]>(entity.sceneIds ?? []);
-  const [image, setImage] = useState<string | null>(null);
+  const imageKey = `${kind}:${entity.id}`;
+  const [image, setImage] = useState<string | null>(() => imageCache.get(imageKey) ?? null);
   const [metaOpen, setMetaOpen] = useState(false);
 
   useEffect(() => {
+    if (imageCache.has(imageKey)) return;
     let alive = true;
     void api.getEntityImage(kind, entity.id).then((img) => {
+      imageCache.set(imageKey, img);
       if (alive) setImage(img);
     });
     return () => {
       alive = false;
     };
-  }, [kind, entity.id]);
+  }, [kind, entity.id, imageKey]);
 
   async function saveName() {
     const trimmed = name.trim();
@@ -67,7 +75,9 @@ export function EntityDoc({
     if (typeof file !== "string") return;
     try {
       await api.setEntityImage(kind, entity.id, file);
-      setImage(await api.getEntityImage(kind, entity.id));
+      const img = await api.getEntityImage(kind, entity.id);
+      imageCache.set(imageKey, img);
+      setImage(img);
       touchResearch();
     } catch (e) {
       useStore.setState({ error: String(e) });

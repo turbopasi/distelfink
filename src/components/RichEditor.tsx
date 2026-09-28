@@ -232,23 +232,54 @@ function AlignIcon({ variant }: { variant: "left" | "center" | "right" | "justif
   );
 }
 
-export function Toolbar({ editor }: { editor: Editor }) {
-  const state = useEditorState({
+type ToolbarState = Record<
+  | "bold"
+  | "italic"
+  | "h1"
+  | "h2"
+  | "h3"
+  | "alignLeft"
+  | "alignCenter"
+  | "alignRight"
+  | "alignJustify"
+  | "canUndo"
+  | "canRedo",
+  boolean
+>;
+
+const IDLE_TOOLBAR: ToolbarState = {
+  bold: false,
+  italic: false,
+  h1: false,
+  h2: false,
+  h3: false,
+  alignLeft: false,
+  alignCenter: false,
+  alignRight: false,
+  alignJustify: false,
+  canUndo: false,
+  canRedo: false,
+};
+
+/** Ohne Editor (Dokument lädt noch) steht die Leiste schon da, nur mit
+ *  gesperrten Knöpfen — so springt beim Dokumentwechsel nichts. */
+export function Toolbar({ editor }: { editor: Editor | null }) {
+  const state = useEditorState<ToolbarState>({
     editor,
-    selector: ({ editor }) => ({
-      bold: editor.isActive("bold"),
-      italic: editor.isActive("italic"),
-      h1: editor.isActive("heading", { level: 1 }),
-      h2: editor.isActive("heading", { level: 2 }),
-      h3: editor.isActive("heading", { level: 3 }),
-      alignLeft: editor.isActive({ textAlign: "left" }),
-      alignCenter: editor.isActive({ textAlign: "center" }),
-      alignRight: editor.isActive({ textAlign: "right" }),
-      alignJustify: editor.isActive({ textAlign: "justify" }),
-      canUndo: editor.can().undo(),
-      canRedo: editor.can().redo(),
+    selector: ({ editor }): ToolbarState => ({
+      bold: editor?.isActive("bold") ?? false,
+      italic: editor?.isActive("italic") ?? false,
+      h1: editor?.isActive("heading", { level: 1 }) ?? false,
+      h2: editor?.isActive("heading", { level: 2 }) ?? false,
+      h3: editor?.isActive("heading", { level: 3 }) ?? false,
+      alignLeft: editor?.isActive({ textAlign: "left" }) ?? false,
+      alignCenter: editor?.isActive({ textAlign: "center" }) ?? false,
+      alignRight: editor?.isActive({ textAlign: "right" }) ?? false,
+      alignJustify: editor?.isActive({ textAlign: "justify" }) ?? false,
+      canUndo: editor?.can().undo() ?? false,
+      canRedo: editor?.can().redo() ?? false,
     }),
-  });
+  }) ?? IDLE_TOOLBAR;
 
   // Ohne explizite Absatz-Ausrichtung gilt die Grundeinstellung aus den
   // Editor-Einstellungen — die Buttons zeigen die tatsächliche Darstellung.
@@ -276,13 +307,16 @@ export function Toolbar({ editor }: { editor: Editor }) {
       title={title}
       disabled={disabled}
       onMouseDown={(e) => e.preventDefault() /* Fokus bleibt im Editor */}
-      onClick={action}
+      // Ohne Editor nur wirkungslos statt gesperrt: gesperrte Knöpfe sind
+      // ausgegraut, und das würde beim Wechsel sichtbar aufblitzen.
+      onClick={editor ? action : undefined}
     >
       {label}
     </button>
   );
 
-  const chain = () => editor.chain().focus();
+  // Nur aus Klicks aufgerufen — und die tun ohne Editor nichts.
+  const chain = () => editor!.chain().focus();
 
   return (
     <div className="toolbar">

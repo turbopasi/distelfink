@@ -342,7 +342,9 @@ pub fn set_entity_image(
 }
 
 /// Liefert das Entity-Bild als data-URL (base64) — vermeidet Asset-Protocol-Scopes.
-#[tauri::command]
+/// Läuft abseits des Hauptthreads, und das (evtl. große) Bild wird erst nach
+/// dem Lock gelesen: sonst wartet das Laden des Dokuments auf das Bild.
+#[tauri::command(async)]
 pub fn get_entity_image(
     kind: String,
     id: String,
@@ -350,7 +352,7 @@ pub fn get_entity_image(
 ) -> Result<Option<String>, String> {
     let dir = entity_dir(&kind)?;
     validate_id(&id)?;
-    with_project(&state, |p| {
+    let found = with_project(&state, |p| {
         let rel = entity_rel_path(dir, &id);
         let raw = match fs::read_to_string(p.abs(&rel)) {
             Ok(r) => r,
@@ -366,12 +368,16 @@ pub fn get_entity_image(
         if image.contains(['/', '\\']) || image.contains("..") {
             return Err(format!("Ungültiger Bildname: {image}"));
         }
-        let bytes = match fs::read(p.abs(dir).join(&image)) {
-            Ok(b) => b,
-            Err(_) => return Ok(None),
-        };
-        Ok(Some(images::data_url(&bytes, &images::ext_lower(&image))))
-    })
+        Ok(Some((p.abs(dir).join(&image), image)))
+    })?;
+    let Some((path, image)) = found else {
+        return Ok(None);
+    };
+    let bytes = match fs::read(path) {
+        Ok(b) => b,
+        Err(_) => return Ok(None),
+    };
+    Ok(Some(images::data_url(&bytes, &images::ext_lower(&image))))
 }
 
 // ---------------------------------------------------------------------------
