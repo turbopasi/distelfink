@@ -967,12 +967,17 @@ li.chapter > .binder-row > .binder-title {
   padding: var(--space-8);
 }
 
+/* Gleiche Kopfleiste wie Zeitstrahl und Mindboard: reicht über den
+   Innenabstand des Panels bis an die Ränder. */
 .trash-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
-  margin-bottom: var(--space-7);
+  min-height: var(--view-header-height);
+  margin: calc(-1 * var(--space-8)) calc(-1 * var(--space-8)) var(--space-7);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .trash-header h2 {
@@ -1054,15 +1059,20 @@ li.chapter > .binder-row > .binder-title {
   overflow-y: auto;
   padding: var(--space-8);
   /* Flache Fläche statt Korkmuster: die Karten sind die Objekte, nicht der Tisch. */
-  background: var(--surface-sunken);
+  background: var(--surface-app);
 }
 
+/* Gleiche Kopfleiste wie Zeitstrahl und Mindboard: reicht über den
+   Innenabstand des Korkbretts bis an die Ränder. */
 .corkboard-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
-  margin-bottom: var(--space-7);
+  min-height: var(--view-header-height);
+  margin: calc(-1 * var(--space-8)) calc(-1 * var(--space-8)) var(--space-7);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 /* Der Titel nimmt den freien Platz: Zurueck-Pfeil bleibt am Titel, „Neu"
@@ -1873,7 +1883,9 @@ li.chapter > .binder-row > .binder-title {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  background: var(--surface-rail);
+  /* Deckend, damit das Hintergrundbild (.doc-backdrop) erst unter der
+     Kopfleiste beginnt — gleiche Farbe wie Zeitstrahl und Mindboard. */
+  background: var(--surface-app);
 }
 
 .entity-avatar {
@@ -2085,6 +2097,9 @@ li.chapter > .binder-row > .binder-title {
   border-color: transparent;
   background: transparent;
   padding: 0 var(--space-2);
+  /* Text bündig mit den Überschriften von Zeitstrahl und Mindboard:
+     Innenabstand und Rahmen des Eingabefelds ausgleichen. */
+  margin-left: calc(-1 * (var(--space-2) + 1px));
   min-height: var(--control-height-lg);
 }
 
@@ -2295,15 +2310,17 @@ li.chapter > .binder-row > .binder-title {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: var(--space-8);
 }
 
+/* Gleiche Kopfleiste wie Mindboard und Personen/Orte. */
 .timeline-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
-  margin-bottom: var(--space-7);
+  min-height: var(--view-header-height);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .timeline-header h2 {
@@ -2358,6 +2375,7 @@ li.chapter > .binder-row > .binder-title {
   align-content: start;
   justify-content: start;
   overflow: auto;
+  padding: var(--space-8);
 }
 
 /* Stränge nebeneinander: Zeit läuft nach unten. */

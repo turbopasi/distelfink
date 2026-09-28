@@ -118,6 +118,9 @@
   --control-pad-x-md: 12px;
 
   --titlebar-height: 40px;
+  /* Kopfleiste der Ansichten (Personen/Orte, Zeitstrahl, Mindboard): eine
+     große Steuerhöhe plus Innenabstand und Trennlinie, damit alle gleich hoch sind. */
+  --view-header-height: calc(var(--control-height-lg) + 2 * var(--space-5) + 1px);
   --toolbar-height: 40px;
   --menubar-height: 28px;
   --statusbar-height: 30px;

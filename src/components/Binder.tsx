@@ -278,7 +278,11 @@ function BinderItem({ node }: { node: BinderNode }) {
           <>
             {/* Feste Spalte, damit Ordner mit und ohne Inhalt sowie Dokumente
                 bündig stehen. */}
-            <span className="binder-disclosure" onClick={(e) => e.stopPropagation()}>
+            <span
+              className="binder-disclosure"
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+            >
               {node.kind === "chapter" && node.children.length > 0 && (
                 <button
                   title={collapsed ? "Ausklappen" : "Einklappen"}
@@ -296,7 +300,13 @@ function BinderItem({ node }: { node: BinderNode }) {
               <Icon name={node.kind === "chapter" ? "folder" : "file-text"} size={14} />
               {node.title}
             </span>
-            <span className="binder-actions" onClick={(e) => e.stopPropagation()}>
+            {/* Auch den Doppelklick abfangen: schnelles Zweimal-Klicken auf „+"
+                soll zwei Dokumente anlegen, nicht den Ordner umbenennen. */}
+            <span
+              className="binder-actions"
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+            >
               {node.kind === "scene" && <StatusDot status={statusOf(node)} />}
               {node.kind === "chapter" && (
                 <button
