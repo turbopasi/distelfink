@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import { Selection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { registerContentSource, useStore, type PaneId } from "../store";
@@ -35,6 +44,21 @@ function isTypingElsewhere(editor: Editor): boolean {
     (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable) &&
     !editor.view.dom.contains(active)
   );
+}
+
+/** Cursor am Anfang einer Szene im Fluss (erster Block hinter ihrem Trenner)
+ *  — `null`, wenn sie nicht darin steckt, etwa außerhalb des Flusses. */
+function sceneStart(doc: PMNode, sceneId: string | null): Selection | null {
+  if (!sceneId) return null;
+  let pos: number | null = null;
+  doc.forEach((node, offset) => {
+    if (node.type.name === SCENE_BREAK_NODE && node.attrs.sceneId === sceneId) {
+      pos = offset + node.nodeSize;
+    }
+  });
+  // Die Position hinter dem Trenner liegt zwischen zwei Blöcken — `near`
+  // rückt sie in den folgenden Absatz (bzw. auf ein Bild).
+  return pos === null ? null : Selection.near(doc.resolve(pos));
 }
 
 /** Gemeinsame Extensions aller Dokument-Editoren (Szenen wie Recherche). */
@@ -142,34 +166,43 @@ function EditorInstance({
   const focusScene = useStore((s) => s.panes[paneId].sceneId);
   const focusCounter = useStore((s) => s.panes[paneId].focusCounter);
 
-  // Im Fluss zur ausgewählten Szene springen (Binder-Klick, Fundstelle …).
-  useEffect(() => {
-    if (!editor || !focusScene) return;
-    let pos = -1;
-    editor.state.doc.forEach((node, offset) => {
-      if (node.type.name === SCENE_BREAK_NODE && node.attrs.sceneId === focusScene) {
-        pos = offset + node.nodeSize;
-      }
-    });
-    if (pos < 0) return;
-    // Kein Fokus-Klau, während woanders aktiv getippt wird (z. B. Umbenennen
-    // im Binder) — sonst reißt der Sprung dem Eingabefeld den Fokus weg.
-    if (isTypingElsewhere(editor)) {
-      editor.chain().setTextSelection(pos).scrollIntoView().run();
-      return;
-    }
-    editor.chain().focus(pos).scrollIntoView().run();
-  }, [editor, focusScene, focusCounter]);
+  // Cursor einmal pro Editor-Instanz setzen, noch bevor irgendetwas den Editor
+  // zeigt: ans Ende bzw. im Fluss an den Anfang der gewählten Szene. Ein
+  // frischer Editor hat ihn sonst am Dokumentanfang — steht dort eine H1, kommt
+  // die Werkzeugleiste mit aktivem H1-Knopf zur Welt, und wenn der Cursor
+  // danach wandert, blendet die Button-Transition das sichtbar aus.
+  // Reine Auswahländerung: markiert nichts als ungespeichert (tiptap meldet
+  // `update` nur bei Inhaltsänderungen), und beim ersten Rendern hört noch
+  // niemand auf Transaktionen dieses Editors.
+  const placedFor = useRef<Editor | null>(null);
+  if (editor && placedFor.current !== editor) {
+    placedFor.current = editor;
+    const { doc } = editor.state;
+    editor.view.dispatch(
+      editor.state.tr.setSelection(sceneStart(doc, focusScene) ?? Selection.atEnd(doc)),
+    );
+  }
 
   // Einmaliger Autofocus pro Editor-Instanz (Neuaufbau bei Szenen-/Fluss-
   // Wechsel) — außer es wird gerade woanders aktiv getippt (z. B. Umbenennen
   // im Binder, das per Doppelklick genau so einen Wechsel auslöst).
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!editor) return;
     if (isTypingElsewhere(editor)) return;
-    editor.commands.focus("end");
+    editor.commands.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
+
+  // Im Fluss zur ausgewählten Szene springen (Binder-Klick, Fundstelle …).
+  useLayoutEffect(() => {
+    if (!editor) return;
+    const selection = sceneStart(editor.state.doc, focusScene);
+    if (!selection) return;
+    editor.view.dispatch(editor.state.tr.setSelection(selection).scrollIntoView());
+    // Kein Fokus-Klau, während woanders aktiv getippt wird (z. B. Umbenennen
+    // im Binder) — sonst reißt der Sprung dem Eingabefeld den Fokus weg.
+    if (!isTypingElsewhere(editor)) editor.commands.focus();
+  }, [editor, focusScene, focusCounter]);
 
   if (!editor) return null;
 
