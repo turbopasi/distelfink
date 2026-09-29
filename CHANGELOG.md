@@ -10,6 +10,29 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.13.2 — 2026-09-29
+
+Kleine Fehlerbehebungen und Feinschliff: Der Wechsel zwischen Dokumenten
+läuft jetzt ruhig, ohne Flackern und Aufblitzen.
+
+### Behoben
+
+- **Kein Aufblitzen der Werkzeugleiste mehr.** Beim Wechsel zu einem
+  Dokument, das mit einer Überschrift beginnt, leuchtete der H1-Knopf kurz auf.
+- **Personen und Orte flackern nicht mehr** beim Wechsel. Werkzeugleiste und
+  Seite stehen sofort da, Bilder erscheinen schneller.
+- **Szenensprung im Fluss-Modus.** Ein Klick auf eine Szene setzt den Cursor
+  an ihren Anfang. Bisher landete er beim Öffnen des Flusses am Ende des
+  Kapitels.
+- Ein schneller Doppelklick auf „+" oder den Pfeil im Binder startete das
+  Umbenennen des Ordners.
+
+### Geändert
+
+- **Einheitliche Kopfleisten.** Personen und Orte, Zeitstrahl, Mindboard,
+  Korkbrett und Papierkorb haben jetzt gleich hohe Kopfleisten mit bündigen
+  Titeln. Das Korkbrett hat denselben Hintergrund wie Zeitstrahl und Mindboard.
+
 ## 0.13.1 — 2026-09-27
 
 Ein Stabilitäts-Update ohne neue Funktionen: Distelfink verliert keinen Text
