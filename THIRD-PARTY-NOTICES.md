@@ -328,7 +328,7 @@ SOFTWARE.
 
 ---
 
-## Verzeichnis (521 Bestandteile)
+## Verzeichnis (522 Bestandteile)
 
 | Bestandteil | Version | Herkunft | Lizenz |
 | --- | --- | --- | --- |
@@ -555,6 +555,7 @@ SOFTWARE.
 | idna | 1.1.0 | Rust-Crate | MIT OR Apache-2.0 |
 | idna_adapter | 1.2.2 | Rust-Crate | Apache-2.0 OR MIT |
 | image | 0.25.10 | Rust-Crate | MIT OR Apache-2.0 |
+| image-webp | 0.2.4 | Rust-Crate | MIT OR Apache-2.0 |
 | indexmap | 1.9.3 | Rust-Crate | Apache-2.0 OR MIT |
 | indexmap | 2.14.0 | Rust-Crate | Apache-2.0 OR MIT |
 | infer | 0.22.0 | Rust-Crate | MIT |
@@ -12387,6 +12388,7 @@ Gilt für:
 
 - fdeflate 0.3.7 — MIT OR Apache-2.0
 - image 0.25.10 — MIT OR Apache-2.0
+- image-webp 0.2.4 — MIT OR Apache-2.0
 
 ```text
 Apache License

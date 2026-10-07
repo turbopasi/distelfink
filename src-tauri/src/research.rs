@@ -4,7 +4,7 @@
 //! Zeitstrahl: `timeline.json` (Reihenfolge = Array-Reihenfolge).
 
 use crate::project::{
-    detached_project, make_id, validate_id, with_project, AppState, Saved, WriteResult,
+    detached_project, make_id, validate_id, with_project, AppState, OpenProject, Saved, WriteResult,
 };
 use crate::fsutil::write_atomic;
 use crate::trash;
@@ -60,7 +60,7 @@ pub(crate) fn entity_doc_rel(dir: &str, id: &str) -> String {
     format!("{dir}/{id}.md")
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_entities(kind: String, state: tauri::State<AppState>) -> Result<Vec<Entity>, String> {
     let dir = entity_dir(&kind)?;
     with_project(&state, |p| {
@@ -241,7 +241,7 @@ pub fn update_entity_meta(
 /// Liest das Freitext-Dokument einer Person / eines Orts. Alt-Einträge, die
 /// noch Beschreibung + freie Felder im JSON tragen (früheres Formular),
 /// werden beim ersten Zugriff nach Markdown migriert.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_entity_doc(
     kind: String,
     id: String,
@@ -311,8 +311,41 @@ pub fn write_entity_doc(
     })
 }
 
-/// Kopiert ein Bild in den Entity-Ordner und trägt es im Eintrag ein.
-#[tauri::command]
+/// Legt das Bild eines Eintrags ab (`{id}-img.{ext}`), trägt es im JSON ein
+/// und entfernt ein vorheriges Bild mit anderer Endung.
+fn store_entity_image(
+    p: &mut OpenProject,
+    dir: &str,
+    entity: &mut Entity,
+    bytes: &[u8],
+    ext: &str,
+) -> Result<(), String> {
+    let image_name = format!("{}-img.{ext}", entity.id);
+    write_atomic(&p.abs(dir).join(&image_name), bytes)
+        .map_err(|e| format!("Bild speichern: {e}"))?;
+    if let Some(old) = entity.image.replace(image_name.clone()) {
+        if old != image_name && !old.contains(['/', '\\']) && !old.contains("..") {
+            let _ = fs::remove_file(p.abs(dir).join(old));
+        }
+    }
+    let rel = entity_rel_path(dir, &entity.id);
+    let json =
+        serde_json::to_string_pretty(entity).map_err(|e| format!("Serialisierung: {e}"))?;
+    write_atomic(&p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
+    p.note_mtime(&rel);
+    Ok(())
+}
+
+fn load_entity(p: &OpenProject, dir: &str, id: &str) -> Result<Entity, String> {
+    let rel = entity_rel_path(dir, id);
+    let raw = fs::read_to_string(p.abs(&rel)).map_err(|e| format!("{rel} lesen: {e}"))?;
+    serde_json::from_str(&raw).map_err(|e| format!("{rel} ungültig: {e}"))
+}
+
+/// Übernimmt ein Bild in den Entity-Ordner, auf Vorschaugröße verkleinert —
+/// das Original bräuchte bei jedem Öffnen unnötig lange über die IPC.
+/// Lesen und Verkleinern laufen außerhalb des Locks.
+#[tauri::command(async)]
 pub fn set_entity_image(
     kind: String,
     id: String,
@@ -322,21 +355,14 @@ pub fn set_entity_image(
     let dir = entity_dir(&kind)?;
     validate_id(&id)?;
     let ext = images::image_ext_of(&source_path)?;
+    let original = fs::read(&source_path).map_err(|e| format!("Bild lesen: {e}"))?;
+    let (bytes, ext) = match images::shrink_to_preview(&original) {
+        Some((small, small_ext)) => (small, small_ext.to_string()),
+        None => (original, ext),
+    };
     with_project(&state, |p| {
-        let rel = entity_rel_path(dir, &id);
-        let raw = fs::read_to_string(p.abs(&rel)).map_err(|e| format!("{rel} lesen: {e}"))?;
-        let mut entity: Entity =
-            serde_json::from_str(&raw).map_err(|e| format!("{rel} ungültig: {e}"))?;
-
-        let image_name = format!("{id}-img.{ext}");
-        fs::copy(&source_path, p.abs(dir).join(&image_name))
-            .map_err(|e| format!("Bild kopieren: {e}"))?;
-        entity.image = Some(image_name);
-
-        let json = serde_json::to_string_pretty(&entity)
-            .map_err(|e| format!("Serialisierung: {e}"))?;
-        write_atomic(&p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
-        p.note_mtime(&rel);
+        let mut entity = load_entity(p, dir, &id)?;
+        store_entity_image(p, dir, &mut entity, &bytes, &ext)?;
         Ok(entity)
     })
 }
@@ -344,6 +370,8 @@ pub fn set_entity_image(
 /// Liefert das Entity-Bild als data-URL (base64) — vermeidet Asset-Protocol-Scopes.
 /// Läuft abseits des Hauptthreads, und das (evtl. große) Bild wird erst nach
 /// dem Lock gelesen: sonst wartet das Laden des Dokuments auf das Bild.
+/// Ältere Projekte enthalten noch Originalbilder: die werden hier einmalig
+/// durch die Vorschaugröße ersetzt.
 #[tauri::command(async)]
 pub fn get_entity_image(
     kind: String,
@@ -377,6 +405,18 @@ pub fn get_entity_image(
         Ok(b) => b,
         Err(_) => return Ok(None),
     };
+    if let Some((small, ext)) = images::shrink_to_preview(&bytes) {
+        // Nur ersetzen, wenn der Eintrag inzwischen kein anderes Bild hat.
+        // Scheitert das, wird eben beim nächsten Mal wieder verkleinert.
+        let _ = with_project(&state, |p| {
+            let mut entity = load_entity(p, dir, &id)?;
+            if entity.image.as_deref() == Some(image.as_str()) {
+                store_entity_image(p, dir, &mut entity, &small, ext)?;
+            }
+            Ok(())
+        });
+        return Ok(Some(images::data_url(&small, ext)));
+    }
     Ok(Some(images::data_url(&bytes, &images::ext_lower(&image))))
 }
 
@@ -426,7 +466,9 @@ pub fn import_doc_image(
 }
 
 /// Liefert ein Dokument-Bild als data-URL (base64) — vermeidet Asset-Protocol-Scopes.
-#[tauri::command]
+/// Wie alle reinen Lese-Commands abseits des Hauptthreads: Schreibende
+/// Commands bleiben synchron, damit ihre Reihenfolge erhalten bleibt.
+#[tauri::command(async)]
 pub fn read_doc_image(
     rel: String,
     state: tauri::State<AppState>,
@@ -438,13 +480,14 @@ pub fn read_doc_image(
     if !images::is_image_ext(&ext) {
         return Err(format!("Ungültiger Bildpfad: {rel}"));
     }
-    with_project(&state, |p| {
-        let bytes = match fs::read(p.abs(&rel)) {
-            Ok(b) => b,
-            Err(_) => return Ok(None),
-        };
-        Ok(Some(images::data_url(&bytes, &ext)))
-    })
+    // Nur den Pfad unter dem Lock holen — ein großes Bild blockiert sonst
+    // das Speichern und Laden der Texte.
+    let path = with_project(&state, |p| Ok(p.abs(&rel)))?;
+    let bytes = match fs::read(path) {
+        Ok(b) => b,
+        Err(_) => return Ok(None),
+    };
+    Ok(Some(images::data_url(&bytes, &ext)))
 }
 
 // ---------------------------------------------------------------------------
@@ -862,7 +905,7 @@ const TIMELINE_FILE: &str = "timeline.json";
 /// Name des Strangs, in dem Ereignisse aus der Zeit vor den Strängen landen.
 const DEFAULT_TRACK_NAME: &str = "Haupthandlung";
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn load_timeline(state: tauri::State<AppState>) -> Result<Timeline, String> {
     with_project(&state, |p| {
         let mut timeline: Timeline = fs::read_to_string(p.abs(TIMELINE_FILE))

@@ -94,7 +94,7 @@ pub fn import_background_image(app: tauri::AppHandle, source_path: String) -> Re
 }
 
 /// Liefert das Hintergrundbild als data-URL (None, wenn die Datei fehlt).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_background_image(app: tauri::AppHandle, name: String) -> Result<Option<String>, String> {
     let path = background_file(&app, &name)?;
     let bytes = match fs::read(&path) {

@@ -212,7 +212,7 @@ pub(crate) fn board_ids(root: &std::path::Path) -> Vec<String> {
         .collect()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_mindboards(state: tauri::State<AppState>) -> Result<Vec<MindboardInfo>, String> {
     with_project(&state, |p| {
         let mut list: Vec<MindboardInfo> = read_all(p)
@@ -241,7 +241,7 @@ pub fn create_mindboard(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn load_mindboard(id: String, state: tauri::State<AppState>) -> Result<Mindboard, String> {
     with_project(&state, |p| {
         let board = read_board(p, &id)?;

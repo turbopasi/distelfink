@@ -120,7 +120,7 @@ pub(crate) fn record(p: &mut OpenProject, item: TrashItem) -> Result<(), String>
 // Commands
 // ---------------------------------------------------------------------------
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_trash(state: tauri::State<AppState>) -> Result<Vec<TrashItem>, String> {
     with_project(&state, |p| {
         let mut items = load_index(p);
@@ -228,7 +228,7 @@ pub fn empty_trash(state: tauri::State<AppState>) -> Result<(), String> {
 }
 
 /// Zahl der Einträge — für die Zeile im Binder.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn count_trash(state: tauri::State<AppState>) -> Result<usize, String> {
     with_project(&state, |p| Ok(load_index(p).len()))
 }

@@ -627,7 +627,7 @@ pub fn close_project(state: tauri::State<AppState>) -> Result<(), String> {
 // Commands: Szenen lesen/schreiben
 // ---------------------------------------------------------------------------
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn read_scene(id: String, state: tauri::State<AppState>) -> Result<String, String> {
     validate_id(&id)?;
     with_project(&state, |p| {
@@ -898,7 +898,7 @@ pub(crate) fn restore_binder_node(
 
 /// Vergleicht mtimes aller bekannten Dateien mit dem letzten bekannten Stand.
 /// Aufruf bei Fenster-Fokus. Rückgabe: projektrelative Pfade mit Abweichung.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn check_external_changes(state: tauri::State<AppState>) -> Result<Vec<String>, String> {
     with_project(&state, |p| {
         let changed = p

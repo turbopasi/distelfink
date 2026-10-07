@@ -36,6 +36,8 @@ uuid = { version = "1", features = ["v4"] }
 chrono = "0.4"
 rusqlite = { version = "0.32", features = ["bundled"] }
 base64 = "0.22"
+# Personen-/Ortsbilder auf Vorschaugröße verkleinern (kommt über docx-rs ohnehin mit).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 # Ebene C (interne Versionierung): kein Netzwerk nötig, daher ohne https/ssh.
 git2 = { version = "0.20", default-features = false }
 # Phase 6 (Export/Compile): Markdown-Parsing + Zielformate DOCX/PDF/ePub.

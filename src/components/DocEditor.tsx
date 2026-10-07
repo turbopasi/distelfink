@@ -2,7 +2,7 @@
 // Orts-Dokumente): lädt selbst, speichert debounced mit Konflikt-Erkennung und
 // flusht beim Unmount — unabhängig von der Pane-Speicherlogik der Szenen.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { extraFlushers, useStore, type PaneId } from "../store";
 import { docExtensions, getMarkdown, Toolbar, useEditorLanguage } from "./RichEditor";
@@ -14,6 +14,14 @@ import type { WriteResult } from "../types";
 const AUTOSAVE_MS = 2000;
 
 type Status = "saved" | "dirty" | "conflict";
+
+/** Zuletzt gelesener bzw. gespeicherter Text pro docKey: ein schon einmal
+ *  geöffnetes Dokument steht beim Wechsel sofort da, statt erst nach dem
+ *  Lesen. Der Stand von der Platte wird im Hintergrund nachgeholt. */
+const contentCache = new Map<string, string>();
+
+/** Vom Editor bereitgestellt: gleicht den angezeigten Stand mit der Platte ab. */
+type Reconcile = (disk: string) => void;
 
 export function DocEditor({
   docKey,
@@ -28,14 +36,21 @@ export function DocEditor({
   read: () => Promise<string>;
   write: (content: string, force?: boolean) => Promise<WriteResult>;
 }) {
-  const [content, setContent] = useState<string | null>(null);
+  // Erst beim Lesen bekannt gewordener Text (kein Cache-Treffer).
+  const [loaded, setLoaded] = useState<{ key: string; text: string } | null>(null);
+  const reconcile = useRef<Reconcile | null>(null);
+  const content =
+    loaded?.key === docKey ? loaded.text : (contentCache.get(docKey) ?? null);
 
   useEffect(() => {
     let alive = true;
-    setContent(null);
+    const cached = contentCache.get(docKey);
     void read()
       .then((c) => {
-        if (alive) setContent(c);
+        contentCache.set(docKey, c);
+        if (!alive) return;
+        if (cached === undefined) setLoaded({ key: docKey, text: c });
+        else if (c !== cached) reconcile.current?.(c);
       })
       .catch((e) => useStore.setState({ error: String(e) }));
     return () => {
@@ -49,8 +64,10 @@ export function DocEditor({
   return (
     <DocEditorInstance
       key={docKey}
+      docKey={docKey}
       paneId={paneId}
       initialContent={content}
+      reconcileRef={reconcile}
       read={read}
       write={write}
     />
@@ -75,13 +92,17 @@ function DocEditorFrame() {
 }
 
 function DocEditorInstance({
+  docKey,
   paneId,
   initialContent,
+  reconcileRef,
   read,
   write,
 }: {
+  docKey: string;
   paneId: PaneId;
   initialContent: string;
+  reconcileRef: RefObject<Reconcile | null>;
   read: () => Promise<string>;
   write: (content: string, force?: boolean) => Promise<WriteResult>;
 }) {
@@ -121,6 +142,7 @@ function DocEditorInstance({
           setStatus("conflict");
           return;
         }
+        contentCache.set(docKey, content);
         savedEdits.current = seq;
         // Wurde währenddessen weitergetippt, ist der Stand noch nicht gesichert.
         setStatus(edits.current === seq ? "saved" : "dirty");
@@ -135,7 +157,7 @@ function DocEditorInstance({
       inFlight.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [write]);
+  }, [write, docKey]);
 
   const flushRef = useRef(flush);
   flushRef.current = flush;
@@ -168,6 +190,23 @@ function DocEditorInstance({
   editorRef.current = editor;
   useEditorLanguage(editor);
 
+  // Angezeigt wurde der Stand aus dem Cache; weicht die Platte ab (Sync,
+  // externer Editor), still übernehmen — ohne Undo-Schritt zurück zum alten
+  // Stand. Wurde schon getippt, entscheidet der Konflikt-Banner.
+  useEffect(() => {
+    reconcileRef.current = (disk) => {
+      if (!editor) return;
+      if (edits.current > 0) {
+        setStatus("conflict");
+        return;
+      }
+      editor.chain().setMeta("addToHistory", false).setContent(disk, { emitUpdate: false }).run();
+    };
+    return () => {
+      reconcileRef.current = null;
+    };
+  }, [editor, reconcileRef]);
+
   if (!editor) return <DocEditorFrame />;
 
   return (
@@ -179,6 +218,7 @@ function DocEditorInstance({
             onClick={async () => {
               try {
                 const c = await read();
+                contentCache.set(docKey, c);
                 if (timer.current) clearTimeout(timer.current);
                 editor.commands.setContent(c, { emitUpdate: false });
                 savedEdits.current = edits.current;
@@ -193,11 +233,13 @@ function DocEditorInstance({
           <button
             onClick={async () => {
               const seq = edits.current;
-              const result = await write(getMarkdown(editor), true).catch((e) => {
+              const content = getMarkdown(editor);
+              const result = await write(content, true).catch((e) => {
                 useStore.setState({ error: String(e) });
                 return null;
               });
               if (!result) return;
+              contentCache.set(docKey, content);
               savedEdits.current = seq;
               setStatus(edits.current === seq ? "saved" : "dirty");
             }}
