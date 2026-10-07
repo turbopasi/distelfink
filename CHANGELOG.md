@@ -10,6 +10,27 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.13.3 — 2026-10-08
+
+Ein Wartungs-Update: Distelfink reagiert flüssiger, vor allem bei Personen
+und Orten mit Fotos.
+
+### Verbessert
+
+- **Personen und Orte öffnen schneller.** Bilder werden beim Auswählen auf
+  eine handliche Vorschaugröße verkleinert. Bilder aus älteren Projekten
+  werden beim ersten Öffnen einmal verkleinert, danach geht es schnell.
+- **Schon geöffnete Personen- und Ortsdokumente stehen beim Wechsel sofort
+  da.** Wurde das Dokument inzwischen außerhalb von Distelfink geändert (etwa
+  über Sync), übernimmt Distelfink den neuen Stand.
+- **Weniger Stocken bei der Arbeit.** Texte, Bilder, Mindboards und der
+  Zeitstrahl werden im Hintergrund geladen. Die Oberfläche bleibt dabei
+  bedienbar.
+
+### Geändert
+
+- Tauri 2.12 und aktuelle Plugins als technische Grundlage.
+
 ## 0.13.2 — 2026-09-29
 
 Kleine Fehlerbehebungen und Feinschliff: Der Wechsel zwischen Dokumenten
