@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
+import { loadEntities } from "../entityLists";
 import { PANE_IDS, useStore, type PaneResearchKind } from "../store";
 import { RESEARCH_KIND_LABELS } from "./ResearchPane";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -99,8 +100,9 @@ function ResearchGroup({ kind }: { kind: PaneResearchKind }) {
 
   useEffect(() => {
     let alive = true;
-    void api
-      .listEntities(kind)
+    // Über den gemeinsamen Cache: der Recherche-Bereich zeigt die Einträge
+    // dann ohne eigene Wartezeit.
+    void loadEntities(projectRoot, kind)
       .then((l) => alive && setItems(l.map((e) => ({ id: e.id, name: e.name }))))
       .catch((e) => useStore.setState({ error: String(e) }));
     return () => {

@@ -27,6 +27,13 @@ und Orten mit Fotos.
   Zeitstrahl werden im Hintergrund geladen. Die Oberfläche bleibt dabei
   bedienbar.
 
+### Behoben
+
+- **Kein Aufblitzen mehr beim Wechsel zu Personen und Orten.** Beim Sprung
+  von einem Dokument zu einer Person, von einer Person zu einem Ort oder zu
+  einem neu angelegten Eintrag erschien kurz „Noch keine Personen angelegt"
+  oder „Wähle in der Sidebar …".
+
 ### Geändert
 
 - Tauri 2.12 und aktuelle Plugins als technische Grundlage.
