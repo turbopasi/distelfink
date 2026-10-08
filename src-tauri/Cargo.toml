@@ -44,4 +44,6 @@ git2 = { version = "0.21", default-features = false }
 pulldown-cmark = { version = "0.13", default-features = false }
 docx-rs = "0.4"
 epub-builder = "0.8"
-genpdf = "0.2"
+krilla = { version = "0.8", default-features = false }
+# Zeichen und Breiten der Schriften für den PDF-Satz — dieselbe Version wie in krilla.
+skrifa = "0.42"

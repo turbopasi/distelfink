@@ -46,8 +46,9 @@ pub struct ExportTemplate {
     /// Leer = links. serde(default) hält ältere export-templates.json gültig.
     #[serde(default)]
     pub alignment: String,
-    /// Silbentrennung im ePub. PDF und DOCX trennen nicht — dort entscheidet
-    /// das Textverarbeitungsprogramm bzw. genpdf, nicht wir.
+    /// Silbentrennung im ePub. PDF und DOCX trennen nicht — bei DOCX
+    /// entscheidet das Textverarbeitungsprogramm, der PDF-Satz (pdf.rs) bricht
+    /// nur an Leerzeichen um.
     #[serde(default)]
     pub hyphenation: bool,
     /// BCP-47-Sprachcode für die ePub-Metadaten und xml:lang; leer = "de".
