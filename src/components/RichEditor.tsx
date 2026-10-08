@@ -11,7 +11,7 @@ import type { Node as PMNode } from "@tiptap/pm/model";
 import { Selection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { registerContentSource, useStore, type PaneId } from "../store";
+import { registerContentSource, sceneView, useStore, type PaneId } from "../store";
 import {
   addStats,
   computeStats,
@@ -95,7 +95,9 @@ export function useEditorLanguage(editor: Editor | null) {
 }
 
 export function RichEditor({ paneId }: { paneId: PaneId }) {
-  const pane = useStore((s) => s.panes[paneId]);
+  const view = useStore((s) => sceneView(s.panes[paneId]));
+  const loadCounter = useStore((s) => s.panes[paneId].loadCounter);
+  const content = useStore((s) => s.panes[paneId].content);
   const isActive = useStore((s) => s.activePane === paneId && s.layoutMode !== "single");
   const setActivePane = useStore((s) => s.setActivePane);
 
@@ -106,12 +108,12 @@ export function RichEditor({ paneId }: { paneId: PaneId }) {
       onMouseDownCapture={() => setActivePane(paneId)}
     >
       <DocBackdrop />
-      {pane.sceneId ? (
+      {view ? (
         <EditorInstance
           // Ein Fluss bleibt beim Wechsel innerhalb des Kapitels stehen.
-          key={`${pane.flowIds.join("|") || pane.sceneId}:${pane.loadCounter}`}
+          key={`${view.flowIds.join("|") || view.sceneId}:${loadCounter}`}
           paneId={paneId}
-          initialContent={pane.content}
+          initialContent={content}
         />
       ) : (
         <div className="editor empty">
@@ -163,7 +165,7 @@ function EditorInstance({
   }, [editor, paneId]);
 
   const typewriter = useStore((s) => s.typewriter);
-  const focusScene = useStore((s) => s.panes[paneId].sceneId);
+  const focusScene = useStore((s) => sceneView(s.panes[paneId])?.sceneId ?? null);
   const focusCounter = useStore((s) => s.panes[paneId].focusCounter);
 
   // Cursor einmal pro Editor-Instanz setzen, noch bevor irgendetwas den Editor
@@ -227,6 +229,10 @@ export function getMarkdown(editor: Editor): string {
 
 /** Verzögerung, mit der die Statusleiste nach dem Tippen nachzählt. */
 const STATS_DELAY_MS = 300;
+
+/** Feste Referenz für „kein Fluss“ — ein neues [] je Aufruf hieße für den
+ *  Store-Selektor jedes Mal ein anderer Wert. */
+const NO_SCENES: string[] = [];
 
 /** `value`, aber erst, wenn es sich `ms` lang nicht geändert hat. */
 function useDebouncedValue<T>(value: T, ms: number): T {
@@ -412,7 +418,7 @@ export function Toolbar({ editor }: { editor: Editor | null }) {
 
 function StatusBar({ editor, paneId }: { editor: Editor; paneId: PaneId }) {
   const saveState = useStore((s) => s.panes[paneId].saveState);
-  const sceneId = useStore((s) => s.panes[paneId].sceneId);
+  const sceneId = useStore((s) => sceneView(s.panes[paneId])?.sceneId ?? null);
   const setHistoryFor = useStore((s) => s.setHistoryFor);
   const normVariant = useStore((s) => s.normVariant);
   const setNormVariant = useStore((s) => s.setNormVariant);
@@ -420,7 +426,7 @@ function StatusBar({ editor, paneId }: { editor: Editor; paneId: PaneId }) {
   const toggleTypewriter = useStore((s) => s.toggleTypewriter);
   const flowMode = useStore((s) => s.flowMode);
   const toggleFlowMode = useStore((s) => s.toggleFlowMode);
-  const flowIds = useStore((s) => s.panes[paneId].flowIds);
+  const flowIds = useStore((s) => sceneView(s.panes[paneId])?.flowIds ?? NO_SCENES);
 
   // Die Zählung läuft über das ganze Dokument — also erst, wenn eine Weile
   // nicht getippt wurde, und nicht bei jeder Cursorbewegung.

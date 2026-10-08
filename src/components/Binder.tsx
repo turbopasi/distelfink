@@ -1,6 +1,6 @@
 import { useEffect, useState, type DragEvent } from "react";
 import { api } from "../api";
-import { PANE_IDS, useStore } from "../store";
+import { PANE_IDS, sceneView, useStore } from "../store";
 import { findParentAndIndex, isDescendant } from "../tree";
 import type { BinderNode } from "../types";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -51,7 +51,7 @@ export function Binder() {
 /** Feste Zeile am Fuß des Binders — kein Knoten im Baum: der Papierkorb lässt
  *  sich nicht verschieben, umbenennen oder in einen Ordner ziehen. */
 function TrashRow() {
-  const isOpen = useStore((s) => PANE_IDS.some((p) => s.panes[p].trash));
+  const isOpen = useStore((s) => PANE_IDS.some((p) => s.panes[p].overlay?.kind === "trash"));
   const trashVersion = useStore((s) => s.trashVersion);
   const projectRoot = useStore((s) => s.project?.root);
   const [count, setCount] = useState(0);
@@ -73,7 +73,7 @@ function TrashRow() {
       title={count === 0 ? "Papierkorb (leer)" : `Papierkorb (${count})`}
       onClick={() => {
         const s = useStore.getState();
-        void s.setPaneTrash(s.activePane, !isOpen);
+        void s.setPaneOverlay(s.activePane, isOpen ? null : { kind: "trash" });
       }}
     >
       <span className="binder-disclosure" />
@@ -99,14 +99,21 @@ function BinderItem({ node }: { node: BinderNode }) {
   } = useStore();
   const collapsed = useStore((s) => s.collapsedIds.includes(node.id));
   const isOpen = useStore((s) =>
-    PANE_IDS.some(
-      (p) => s.panes[p].sceneId === node.id || s.panes[p].corkboardId === node.id,
-    ),
+    PANE_IDS.some((p) => {
+      const view = s.panes[p].view;
+      return (
+        (view.kind === "scene" && view.sceneId === node.id) ||
+        (view.kind === "corkboard" && view.chapterId === node.id)
+      );
+    }),
   );
   // Im Fluss-Modus sind die übrigen Szenen des Kapitels mit offen — schwächer
   // markiert als die ausgewählte.
   const inFlow = useStore((s) =>
-    PANE_IDS.some((p) => s.panes[p].sceneId !== node.id && s.panes[p].flowIds.includes(node.id)),
+    PANE_IDS.some((p) => {
+      const v = sceneView(s.panes[p]);
+      return !!v && v.sceneId !== node.id && v.flowIds.includes(node.id);
+    }),
   );
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(node.title);

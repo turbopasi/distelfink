@@ -391,17 +391,17 @@ function SidebarResizer({
  *  anderes Board …), bekommt der neue eine frische Chance. */
 function GuardedPane({ paneId }: { paneId: PaneId }) {
   const contentKey = useStore((s) => {
-    const p = s.panes[paneId];
-    return [
-      p.sceneId,
-      p.flowIds.join(","),
-      p.corkboardId,
-      p.researchKind,
-      p.researchId,
-      p.timeline,
-      p.mindboardId,
-      p.trash,
-    ].join("|");
+    const { view, overlay } = s.panes[paneId];
+    const shown =
+      view.kind === "scene"
+        ? `${view.sceneId}:${view.flowIds.join(",")}`
+        : view.kind === "corkboard"
+          ? view.chapterId
+          : view.kind === "research"
+            ? `${view.researchKind}:${view.id}`
+            : "";
+    const over = overlay?.kind === "mindboard" ? `mindboard:${overlay.id}` : (overlay?.kind ?? "");
+    return `${view.kind}|${shown}|${over}`;
   });
   return (
     <ErrorBoundary label="Dieser Bereich" resetKey={contentKey}>
@@ -410,27 +410,25 @@ function GuardedPane({ paneId }: { paneId: PaneId }) {
   );
 }
 
-/** Zeigt je nach Pane-Zustand Zeitstrahl, Mindboard, Corkboard, Recherche-Inhalt oder Editor. */
+/** Zeigt die Auflage eines Panes (Papierkorb, Zeitstrahl, Mindboard), sonst
+ *  seine Ansicht (Corkboard, Recherche-Inhalt oder Editor). */
 function PaneView({ paneId }: { paneId: PaneId }) {
-  const timeline = useStore((s) => s.panes[paneId].timeline);
-  const mindboardId = useStore((s) => s.panes[paneId].mindboardId);
-  const trash = useStore((s) => s.panes[paneId].trash);
-  const corkboardId = useStore((s) => s.panes[paneId].corkboardId);
-  const researchKind = useStore((s) => s.panes[paneId].researchKind);
+  const view = useStore((s) => s.panes[paneId].view);
+  const overlay = useStore((s) => s.panes[paneId].overlay);
   const isActive = useStore((s) => s.activePane === paneId && s.layoutMode !== "single");
   const setActivePane = useStore((s) => s.setActivePane);
 
-  // Auflagen in fester Vorrangfolge; Editor und Recherche bringen ihren
-  // eigenen Rahmen mit.
-  const module = trash ? (
-    <TrashPanel />
-  ) : timeline ? (
-    <TimelinePanel />
-  ) : mindboardId ? (
-    <MindboardPanel key={mindboardId} boardId={mindboardId} paneId={paneId} />
-  ) : corkboardId ? (
-    <Corkboard chapterId={corkboardId} />
-  ) : null;
+  // Editor und Recherche bringen ihren eigenen Rahmen mit.
+  const module =
+    overlay?.kind === "trash" ? (
+      <TrashPanel />
+    ) : overlay?.kind === "timeline" ? (
+      <TimelinePanel />
+    ) : overlay?.kind === "mindboard" ? (
+      <MindboardPanel key={overlay.id} boardId={overlay.id} paneId={paneId} />
+    ) : view.kind === "corkboard" ? (
+      <Corkboard chapterId={view.chapterId} />
+    ) : null;
 
   if (module) {
     return (
@@ -442,8 +440,8 @@ function PaneView({ paneId }: { paneId: PaneId }) {
       </section>
     );
   }
-  if (researchKind) {
-    return <ResearchPane paneId={paneId} />;
+  if (view.kind === "research") {
+    return <ResearchPane paneId={paneId} kind={view.researchKind} researchId={view.id} />;
   }
   return <RichEditor paneId={paneId} />;
 }

@@ -11,9 +11,15 @@ export const RESEARCH_KIND_LABELS: Record<PaneResearchKind, { singular: string; 
 };
 
 /** Pane-Inhalt für Recherche: das Detail zum in der Sidebar gewählten Eintrag. */
-export function ResearchPane({ paneId }: { paneId: PaneId }) {
-  const kind = useStore((s) => s.panes[paneId].researchKind)!;
-  const researchId = useStore((s) => s.panes[paneId].researchId);
+export function ResearchPane({
+  paneId,
+  kind,
+  researchId,
+}: {
+  paneId: PaneId;
+  kind: PaneResearchKind;
+  researchId: string | null;
+}) {
   const isActive = useStore((s) => s.activePane === paneId && s.layoutMode !== "single");
   const setActivePane = useStore((s) => s.setActivePane);
   const setPaneResearchId = useStore((s) => s.setPaneResearchId);

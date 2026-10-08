@@ -28,8 +28,7 @@ export function QuickNav() {
   const selectScene = useStore((s) => s.selectScene);
   const selectChapter = useStore((s) => s.selectChapter);
   const openResearchInPane = useStore((s) => s.openResearchInPane);
-  const setPaneTimeline = useStore((s) => s.setPaneTimeline);
-  const setPaneMindboard = useStore((s) => s.setPaneMindboard);
+  const setPaneOverlay = useStore((s) => s.setPaneOverlay);
 
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
@@ -112,8 +111,8 @@ export function QuickNav() {
     if (kind === "scene") void selectScene(id);
     else if (kind === "character") void openResearchInPane(activePane, "characters", id);
     else if (kind === "location") void openResearchInPane(activePane, "locations", id);
-    else if (kind === "event") void setPaneTimeline(activePane, true);
-    else if (kind === "mindboard") void setPaneMindboard(activePane, id);
+    else if (kind === "event") void setPaneOverlay(activePane, { kind: "timeline" });
+    else if (kind === "mindboard") void setPaneOverlay(activePane, { kind: "mindboard", id });
   }
 
   return (

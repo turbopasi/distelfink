@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, sceneRelPath } from "../api";
 import { diffLines } from "../diff";
 import { splitFlow } from "../flow";
-import { PANE_IDS, useStore } from "../store";
+import { PANE_IDS, sceneView, showsScene, useStore } from "../store";
 import { findNode } from "../tree";
 import type { VersionInfo } from "../types";
 
@@ -24,11 +24,10 @@ function HistoryPanel({ sceneId }: { sceneId: string }) {
   const paneContent = useStore((s) => {
     for (const id of PANE_IDS) {
       const pane = s.panes[id];
-      if (pane.flowIds.length > 0) {
-        if (!pane.flowIds.includes(sceneId)) continue;
-        return splitFlow(pane.content, pane.flowIds).find((p) => p.id === sceneId)?.content ?? null;
-      }
-      if (pane.sceneId === sceneId) return pane.content;
+      const v = sceneView(pane);
+      if (!v || !showsScene(pane, sceneId)) continue;
+      if (!v.flowIds.length) return pane.content;
+      return splitFlow(pane.content, v.flowIds).find((p) => p.id === sceneId)?.content ?? null;
     }
     return null;
   });

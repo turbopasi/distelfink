@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { loadEntities } from "../entityLists";
-import { PANE_IDS, useStore, type PaneResearchKind } from "../store";
+import {
+  PANE_IDS,
+  showsMindboard,
+  showsResearch,
+  useStore,
+  type PaneResearchKind,
+} from "../store";
 import { RESEARCH_KIND_LABELS } from "./ResearchPane";
 import { ContextMenu, useContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { Icon, type IconName } from "./Icon";
@@ -32,10 +38,10 @@ const PLANNING_MODULES: PlanningModule[] = [
     id: "timeline",
     icon: "🕘",
     label: "Zeitstrahl",
-    isOpen: (s) => PANE_IDS.some((p) => s.panes[p].timeline),
+    isOpen: (s) => PANE_IDS.some((p) => s.panes[p].overlay?.kind === "timeline"),
     toggle: (s, on) => {
-      const pane = PANE_IDS.find((p) => s.panes[p].timeline) ?? s.activePane;
-      void s.setPaneTimeline(pane, on);
+      const pane = PANE_IDS.find((p) => s.panes[p].overlay?.kind === "timeline") ?? s.activePane;
+      void s.setPaneOverlay(pane, on ? { kind: "timeline" } : null);
     },
   },
 ];
@@ -161,7 +167,7 @@ function ResearchGroup({ kind }: { kind: PaneResearchKind }) {
 
 function ResearchItem({ kind, id, name }: { kind: PaneResearchKind; id: string; name: string }) {
   const isOpen = useStore((s) =>
-    PANE_IDS.some((p) => s.panes[p].researchKind === kind && s.panes[p].researchId === id),
+    PANE_IDS.some((p) => showsResearch(s.panes[p], kind, id)),
   );
   const touchResearch = useStore((s) => s.touchResearch);
   const [editing, setEditing] = useState(false);
@@ -219,7 +225,7 @@ function ResearchItem({ kind, id, name }: { kind: PaneResearchKind; id: string; 
       // Panes leeren, die den gelöschten Eintrag zeigen.
       const s = useStore.getState();
       for (const p of PANE_IDS) {
-        if (s.panes[p].researchKind === kind && s.panes[p].researchId === id) {
+        if (showsResearch(s.panes[p], kind, id)) {
           s.setPaneResearchId(p, null);
         }
       }
@@ -304,7 +310,7 @@ function MindboardGroup() {
       const s = useStore.getState();
       s.touchMindboards();
       setCollapsed(false);
-      void s.setPaneMindboard(s.activePane, created.id);
+      void s.setPaneOverlay(s.activePane, { kind: "mindboard", id: created.id });
     } catch (e) {
       useStore.setState({ error: String(e) });
     }
@@ -340,7 +346,7 @@ function MindboardGroup() {
 }
 
 function MindboardItem({ id, name }: { id: string; name: string }) {
-  const isOpen = useStore((s) => PANE_IDS.some((p) => s.panes[p].mindboardId === id));
+  const isOpen = useStore((s) => PANE_IDS.some((p) => showsMindboard(s.panes[p], id)));
   const touchMindboards = useStore((s) => s.touchMindboards);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -348,7 +354,7 @@ function MindboardItem({ id, name }: { id: string; name: string }) {
 
   const open = () => {
     const s = useStore.getState();
-    void s.setPaneMindboard(s.activePane, id);
+    void s.setPaneOverlay(s.activePane, { kind: "mindboard", id });
   };
 
   function startRename() {
@@ -379,7 +385,7 @@ function MindboardItem({ id, name }: { id: string; name: string }) {
       // Erst schließen, damit das Board beim Aushängen nicht neu gespeichert wird.
       const s = useStore.getState();
       for (const p of PANE_IDS) {
-        if (s.panes[p].mindboardId === id) await s.setPaneMindboard(p, null);
+        if (showsMindboard(s.panes[p], id)) await s.setPaneOverlay(p, null);
       }
       await api.deleteMindboard(id);
       touchMindboards();
