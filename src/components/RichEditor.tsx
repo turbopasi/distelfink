@@ -19,6 +19,7 @@ import {
   emptyStats,
   formatNorm,
   subStats,
+  type NormVariant,
   type TextStats,
 } from "../stats";
 import { collectSceneIds, findNode, findParentAndIndex } from "../tree";
@@ -193,7 +194,6 @@ function EditorInstance({
     if (!editor) return;
     if (isTypingElsewhere(editor)) return;
     editor.commands.focus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
   // Im Fluss zur ausgewählten Szene springen (Binder-Klick, Fundstelle …).
@@ -230,6 +230,11 @@ export function getMarkdown(editor: Editor): string {
 
 /** Verzögerung, mit der die Statusleiste nach dem Tippen nachzählt. */
 const STATS_DELAY_MS = 300;
+
+/** Normseiten in der gewählten Zählweise. */
+function normPages(t: TextStats, variant: NormVariant): number {
+  return variant === "1800" ? t.norm1800 : t.norm30x60;
+}
 
 /** Feste Referenz für „kein Fluss“ — ein neues [] je Aufruf hieße für den
  *  Store-Selektor jedes Mal ein anderer Wert. */
@@ -463,7 +468,7 @@ function StatusBar({ editor, paneId }: { editor: Editor; paneId: PaneId }) {
     },
   });
   const stats = useMemo(() => computeStats(text), [text]);
-  const norm = normVariant === "1800" ? stats.norm1800 : stats.norm30x60;
+  const norm = normPages(stats, normVariant);
 
   const binder = useStore((s) => s.project?.meta.binder);
   const sceneStats = useStore((s) => s.sceneStats);
@@ -484,7 +489,6 @@ function StatusBar({ editor, paneId }: { editor: Editor; paneId: PaneId }) {
     );
     return addStats(subStats(saved, own), stats);
   }, [binder, sceneStats, sceneId, flowIds, stats]);
-  const totalNorm = (t: TextStats) => (normVariant === "1800" ? t.norm1800 : t.norm30x60);
 
   // Im Fluss beziehen sich die linken Zahlen auf das Kapitel, der Verlauf auf
   // die Szene am Cursor.
@@ -514,11 +518,10 @@ function StatusBar({ editor, paneId }: { editor: Editor; paneId: PaneId }) {
         `Gesamtes Manuskript: ${total.words.toLocaleString("de-DE")} Wörter · ` +
           `${total.charsWithSpaces.toLocaleString("de-DE")} / ` +
           `${total.charsWithoutSpaces.toLocaleString("de-DE")} Zeichen · ` +
-          `${formatNorm(totalNorm(total))} Normseiten`,
+          `${formatNorm(normPages(total, normVariant))} Normseiten`,
       );
     }
     return lines.join("\n");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stats, norm, total, normVariant]);
 
   return (
@@ -546,7 +549,7 @@ function StatusBar({ editor, paneId }: { editor: Editor; paneId: PaneId }) {
         {total && (
           <span className="total-stats">
             Gesamt {total.words.toLocaleString("de-DE")} Wörter ·{" "}
-            {formatNorm(totalNorm(total))} Normseiten
+            {formatNorm(normPages(total, normVariant))} Normseiten
           </span>
         )}
       </div>

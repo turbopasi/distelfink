@@ -1,0 +1,10 @@
+# Bewusst hingenommene Meldungen von `cargo audit` — jede mit Grund und
+# Ablaufbedingung. Die Liste soll kurz bleiben.
+
+[advisories]
+ignore = [
+    # lopdf 0.26 (über genpdf): Stack-Overflow beim *Einlesen* tief
+    # verschachtelter PDFs. Distelfink schreibt mit genpdf nur PDFs und liest
+    # nie welche ein. Fällt weg, sobald genpdf ersetzt ist (Paket 6).
+    "RUSTSEC-2026-0187",
+]

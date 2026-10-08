@@ -61,7 +61,6 @@ function useCaretCoords(editor: Editor, pos: number) {
       return null;
     }
     // Die Position ist für die Lebensdauer des Popups fest.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, pos]);
 }
 

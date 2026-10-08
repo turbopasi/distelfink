@@ -53,6 +53,8 @@ function HistoryPanel({ sceneId }: { sceneId: string }) {
         setError(String(e));
       }
     })();
+    // Einmal beim Öffnen: `paneContent` ändert sich mit jedem Tastendruck,
+    // und neu zu laden ist dann nichts.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneId]);
 
@@ -63,8 +65,7 @@ function HistoryPanel({ sceneId }: { sceneId: string }) {
       .getVersion(selected.commitId, rel)
       .then(setVersionContent)
       .catch((e) => setError(String(e)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
+  }, [selected, rel]);
 
   const diff = useMemo(
     () => (versionContent !== null && current !== null ? diffLines(versionContent, current) : null),

@@ -39,7 +39,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -47,6 +47,11 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      # Hook-Abhängigkeiten und TypeScript-Regeln (eslint.config.js).
+      - name: Lint
+        if: matrix.platform == 'ubuntu-22.04'
+        run: npm run lint
 
       # Vor dem teuren Build: die Roundtrip-Tests des Editors (Markdown,
       # Ausrichtung, Planungs-Tags, Mindboard-Modell).
@@ -58,6 +63,12 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         working-directory: src-tauri
         run: cargo fmt --check
+
+      # clippy ist sauber und soll es bleiben.
+      - name: Rust lints
+        if: matrix.platform == 'ubuntu-22.04'
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
 
       # Einmal reicht — die Rust-Logik ist plattformunabhängig, und jeder
       # Testlauf kompiliert das Backend ein zweites Mal (Debug-Profil).
@@ -102,3 +113,25 @@ jobs:
           path: |
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/deb/*.deb
+
+  # Bekannte Sicherheitslücken in Abhängigkeiten. Ein eigener Job: eine neue
+  # Meldung soll sichtbar werden, aber nicht spontan einen Release blockieren.
+  audit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+
+      - name: npm audit
+        run: npm audit --omit=dev
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: cargo audit
+        working-directory: src-tauri
+        run: cargo audit

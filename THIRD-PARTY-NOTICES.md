@@ -675,7 +675,7 @@ SOFTWARE.
 | rusqlite | 0.32.1 | Rust-Crate | MIT |
 | rustc-hash | 2.1.3 | Rust-Crate | Apache-2.0 OR MIT |
 | rustix | 1.1.4 | Rust-Crate | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
-| rustls | 0.23.43 | Rust-Crate | Apache-2.0 OR ISC OR MIT |
+| rustls | 0.23.45 | Rust-Crate | Apache-2.0 OR ISC OR MIT |
 | rustls-native-certs | 0.8.4 | Rust-Crate | Apache-2.0 OR ISC OR MIT |
 | rustls-pki-types | 1.15.1 | Rust-Crate | MIT OR Apache-2.0 |
 | rustls-platform-verifier | 0.7.0 | Rust-Crate | MIT OR Apache-2.0 |
@@ -16679,7 +16679,7 @@ THE SOFTWARE.
 Gilt für:
 
 - hyper-rustls 0.27.9 — Apache-2.0 OR ISC OR MIT
-- rustls 0.23.43 — Apache-2.0 OR ISC OR MIT
+- rustls 0.23.45 — Apache-2.0 OR ISC OR MIT
 
 ```text
 Apache License

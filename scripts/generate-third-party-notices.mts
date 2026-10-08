@@ -120,7 +120,7 @@ function collectRust(): Component[] {
 
 function collectNpm(): Component[] {
   // `npm ls` meldet Exit-Code != 0 bei Peer-Warnungen; Ausgabe trotzdem nutzen.
-  let out = "";
+  let out: string;
   try {
     out = execFileSync("npm", ["ls", "--omit=dev", "--all", "--parseable"], {
       cwd: ROOT,
