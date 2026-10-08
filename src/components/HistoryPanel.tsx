@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, sceneRelPath } from "../api";
 import { diffLines } from "../diff";
+import { splitFlow } from "../flow";
 import { PANE_IDS, useStore } from "../store";
 import { findNode } from "../tree";
 import type { VersionInfo } from "../types";
@@ -18,9 +19,18 @@ function HistoryPanel({ sceneId }: { sceneId: string }) {
   const restoreVersion = useStore((s) => s.restoreVersion);
   const flushAll = useStore((s) => s.flushAll);
   // Aktueller Editorstand, falls die Szene gerade offen ist (Diff-Basis).
+  // Im Fluss steht das ganze Kapitel im Editor — verglichen wird nur der
+  // Abschnitt dieser Szene, sonst erschiene der Rest als „hinzugefügt".
   const paneContent = useStore((s) => {
-    const open = PANE_IDS.find((id) => s.panes[id].sceneId === sceneId);
-    return open ? s.panes[open].content : null;
+    for (const id of PANE_IDS) {
+      const pane = s.panes[id];
+      if (pane.flowIds.length > 0) {
+        if (!pane.flowIds.includes(sceneId)) continue;
+        return splitFlow(pane.content, pane.flowIds).find((p) => p.id === sceneId)?.content ?? null;
+      }
+      if (pane.sceneId === sceneId) return pane.content;
+    }
+    return null;
   });
 
   const [versions, setVersions] = useState<VersionInfo[] | null>(null);

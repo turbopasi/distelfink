@@ -19,6 +19,14 @@ flexiblen Export in einer Anwendung zusammen.
 sinnvolles Git-Diffing. SQLite dient nur als regenerierbarer Such-/Index-Cache
 (`.cache/index.sqlite`, nicht versioniert).
 
+**Sync auf mehreren Rechnern:** Der Verlauf (Sicherungspunkte) liegt als
+`.git`-Ordner im Projekt und wird mitsynchronisiert. Git rechnet nicht damit,
+dass ein Sync-Dienst seine Dateien zwischen zwei Rechnern hin- und herschiebt:
+Ist das Projekt auf beiden gleichzeitig geöffnet, kann der Verlauf beschädigt
+werden. Deshalb ein Projekt immer nur auf einem Rechner geöffnet haben und vor
+dem Wechsel warten, bis der Sync fertig ist. Die Texte selbst sind davon nicht
+betroffen.
+
 **Website:** <https://turbopasi.github.io/distelfink/>
 
 ## Installation

@@ -59,7 +59,7 @@ pub fn run() {
             mindboard::save_mindboard,
             mindboard::rename_mindboard,
             mindboard::delete_mindboard,
-            mindboard::write_mindboard_png,
+            mindboard::export_mindboard_png,
             search::search_project,
             versioning::snapshot,
             versioning::list_history,

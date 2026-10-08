@@ -454,7 +454,20 @@ fn read_meta(root: &Path) -> Result<ProjectMeta, String> {
             meta.format_version
         ));
     }
+    validate_binder_ids(&meta.binder).map_err(|e| format!("project.json ungültig: {e}"))?;
     Ok(meta)
+}
+
+/// IDs werden zu Dateinamen (`manuscript/{id}.md`). Eine von Hand oder von
+/// einem fremden Programm veränderte project.json darf so keine Dateien
+/// außerhalb des Projekts erreichen — Löschen verschiebt sie sonst etwa in
+/// den Papierkorb.
+pub(crate) fn validate_binder_ids(nodes: &[BinderNode]) -> Result<(), String> {
+    for n in nodes {
+        validate_id(&n.id)?;
+        validate_binder_ids(&n.children)?;
+    }
+    Ok(())
 }
 
 /// Entfernt Zwischendateien, die ein Absturz beim Speichern hinterlassen hat.
@@ -964,6 +977,18 @@ mod tests {
         assert_eq!(on_disk.binder.len(), 2);
         assert_eq!(on_disk.binder[0].title, "Neu");
         assert!(!p.changed_externally(PROJECT_FILE));
+        let _ = fs::remove_dir_all(&p.root);
+    }
+
+    #[test]
+    fn projektdatei_mit_pfad_als_id_wird_abgelehnt() {
+        let p = open_test_project(vec![scene("a-111111")]);
+        let mut evil = p.meta.clone();
+        evil.binder[0].children.push(scene("../../outside"));
+        fs::write(p.abs(PROJECT_FILE), serde_json::to_string(&evil).unwrap()).unwrap();
+
+        let err = read_meta(&p.root).err().expect("muss scheitern");
+        assert!(err.contains("Ungültige Node-ID"), "{err}");
         let _ = fs::remove_dir_all(&p.root);
     }
 

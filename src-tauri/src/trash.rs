@@ -9,7 +9,8 @@
 //! `.trash/` ist in `.gitignore` — der Papierkorb gehört nicht in den Verlauf.
 
 use crate::project::{
-    restore_binder_node, with_project, AppState, BinderNode, OpenProject, ProjectInfo,
+    restore_binder_node, validate_binder_ids, with_project, AppState, BinderNode, OpenProject,
+    ProjectInfo,
 };
 use crate::fsutil::write_atomic;
 use serde::{Deserialize, Serialize};
@@ -109,6 +110,32 @@ pub(crate) fn move_to_trash(p: &mut OpenProject, rel: &str) -> Result<Option<Tra
     }))
 }
 
+/// Ein Dateiname direkt in `.trash/` — ohne Pfadanteile.
+fn is_plain_name(name: &str) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\', ':'])
+}
+
+/// Ein projektrelativer Pfad, der im Projekt bleibt.
+fn is_project_rel(rel: &str) -> bool {
+    !rel.contains(['\\', ':'])
+        && rel.split('/').all(|part| !part.is_empty() && part != "." && part != "..")
+}
+
+/// Der Index ist eine Datei im Projekt und kann von Hand oder durch ein
+/// anderes Programm verändert sein. Seine Pfade dürfen nicht aus dem Projekt
+/// hinausführen — Wiederherstellen und Löschen arbeiten direkt mit ihnen.
+fn check_item(item: &TrashItem) -> Result<(), String> {
+    for f in &item.files {
+        if !is_plain_name(&f.name) || !is_project_rel(&f.target) {
+            return Err(format!("Ungültiger Papierkorb-Eintrag: {} → {}", f.name, f.target));
+        }
+    }
+    if let Some(node) = &item.node {
+        validate_binder_ids(std::slice::from_ref(node))?;
+    }
+    Ok(())
+}
+
 /// Trägt einen gelöschten Eintrag in den Papierkorb-Index ein.
 pub(crate) fn record(p: &mut OpenProject, item: TrashItem) -> Result<(), String> {
     let mut items = load_index(p);
@@ -143,6 +170,7 @@ pub fn restore_trash(key: String, state: tauri::State<AppState>) -> Result<Proje
             .position(|i| i.key == key)
             .ok_or(format!("Nicht im Papierkorb: {key}"))?;
         let item = items[pos].clone();
+        check_item(&item)?;
 
         // Erst prüfen, dann verschieben: ein halb wiederhergestellter Eintrag
         // wäre schlimmer als einer, der im Papierkorb bleibt.
@@ -201,7 +229,9 @@ pub fn delete_trash_item(key: String, state: tauri::State<AppState>) -> Result<(
             .position(|i| i.key == key)
             .ok_or(format!("Nicht im Papierkorb: {key}"))?;
         for f in &items[pos].files {
-            let _ = fs::remove_file(p.abs(TRASH_DIR).join(&f.name));
+            if is_plain_name(&f.name) {
+                let _ = fs::remove_file(p.abs(TRASH_DIR).join(&f.name));
+            }
         }
         items.remove(pos);
         save_index(p, &items)
@@ -233,3 +263,21 @@ pub fn count_trash(state: tauri::State<AppState>) -> Result<usize, String> {
     with_project(&state, |p| Ok(load_index(p).len()))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pfade_bleiben_im_projekt() {
+        assert!(is_project_rel("manuscript/szene-abc123.md"));
+        assert!(is_project_rel("characters/anna-aaa111-img.png"));
+        assert!(!is_project_rel("../outside.md"));
+        assert!(!is_project_rel("manuscript/../../outside.md"));
+        assert!(!is_project_rel("/etc/passwd"));
+        assert!(!is_project_rel("C:/Windows/win.ini"));
+        assert!(!is_project_rel("manuscript\\..\\x.md"));
+        assert!(is_plain_name("20261008-120000-szene.md"));
+        assert!(!is_plain_name("../szene.md"));
+        assert!(!is_plain_name(".."));
+    }
+}

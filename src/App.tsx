@@ -21,6 +21,7 @@ import { ExportOverlay } from "./components/ExportDialog";
 import { SettingsOverlay } from "./components/SettingsDialog";
 import { AboutOverlay } from "./components/AboutDialog";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./App.css";
 
 /** Wie lange das Schließen höchstens aufs Speichern wartet. */
@@ -163,11 +164,21 @@ function App() {
       ))}
       <ExternalChangesBanner />
       {project && <UpdateBanner />}
-      <QuickNav />
-      <HistoryOverlay />
-      <ExportOverlay />
-      <SettingsOverlay />
-      <AboutOverlay />
+      <ErrorBoundary label="Die Schnellsuche" onDismiss={() => useStore.getState().setQuickNavOpen(false)}>
+        <QuickNav />
+      </ErrorBoundary>
+      <ErrorBoundary label="Der Verlauf" onDismiss={() => useStore.getState().setHistoryFor(null)}>
+        <HistoryOverlay />
+      </ErrorBoundary>
+      <ErrorBoundary label="Der Export" onDismiss={() => useStore.getState().setExportOpen(false)}>
+        <ExportOverlay />
+      </ErrorBoundary>
+      <ErrorBoundary label="Die Einstellungen" onDismiss={() => useStore.getState().setSettingsOpen(false)}>
+        <SettingsOverlay />
+      </ErrorBoundary>
+      <ErrorBoundary label="„Über Distelfink“" onDismiss={() => useStore.getState().setAboutOpen(false)}>
+        <AboutOverlay />
+      </ErrorBoundary>
       {project ? (
         <MainView />
       ) : (
@@ -290,7 +301,7 @@ function MainView() {
         <div className="pane-grid" data-mode={layoutMode}>
           {PANES_FOR_MODE[layoutMode].map((id) => (
             <div key={id} className="pane-cell" style={{ gridArea: id }}>
-              <PaneView paneId={id} />
+              <GuardedPane paneId={id} />
             </div>
           ))}
         </div>
@@ -310,12 +321,16 @@ function SidebarStack({ side }: { side: "left" | "right" }) {
 
   const binder = binderHere && (
     <div className={`sidebar-slot sidebar--${side}`} key="binder">
-      <Binder />
+      <ErrorBoundary label="Der Binder">
+        <Binder />
+      </ErrorBoundary>
     </div>
   );
   const research = researchHere && (
     <div className={`sidebar-slot sidebar--${side}`} key="research">
-      <ResearchSidebar />
+      <ErrorBoundary label="Die Planungsleiste">
+        <ResearchSidebar />
+      </ErrorBoundary>
     </div>
   );
   const binderResizer = binderHere && (
@@ -370,6 +385,29 @@ function SidebarResizer({
     window.addEventListener("mouseup", up);
   };
   return <div className="pane-resizer" onMouseDown={onMouseDown} />;
+}
+
+/** Ein Pane hinter seiner Error Boundary. Wechselt der Inhalt (andere Szene,
+ *  anderes Board …), bekommt der neue eine frische Chance. */
+function GuardedPane({ paneId }: { paneId: PaneId }) {
+  const contentKey = useStore((s) => {
+    const p = s.panes[paneId];
+    return [
+      p.sceneId,
+      p.flowIds.join(","),
+      p.corkboardId,
+      p.researchKind,
+      p.researchId,
+      p.timeline,
+      p.mindboardId,
+      p.trash,
+    ].join("|");
+  });
+  return (
+    <ErrorBoundary label="Dieser Bereich" resetKey={contentKey}>
+      <PaneView paneId={paneId} />
+    </ErrorBoundary>
+  );
 }
 
 /** Zeigt je nach Pane-Zustand Zeitstrahl, Mindboard, Corkboard, Recherche-Inhalt oder Editor. */

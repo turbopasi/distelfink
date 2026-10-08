@@ -41,6 +41,12 @@ export interface EntityField {
   value: string;
 }
 
+/** Personen-/Ortsliste; `broken` = Dateien, die sich nicht lesen ließen. */
+export interface EntityList {
+  entities: Entity[];
+  broken: string[];
+}
+
 export interface Entity {
   id: string;
   name: string;

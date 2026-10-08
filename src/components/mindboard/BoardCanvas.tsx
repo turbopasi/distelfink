@@ -16,7 +16,6 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { api } from "../../api";
 import { useStore, type PaneId } from "../../store";
 import type {
@@ -1121,19 +1120,13 @@ export function BoardCanvas({
 
   const exportPng = async () => {
     try {
-      const path = await saveDialog({
-        title: "Mindboard als Bild speichern",
-        defaultPath: `${name || "Mindboard"}.png`,
-        filters: [{ name: "PNG-Bild", extensions: ["png"] }],
-      });
-      if (!path) return;
       const b = getBoard();
       const data = await exportBoardPng(b, (n) => nodeRect(n), viewportRef.current!);
       if (!data) {
         useStore.setState({ error: "Das Mindboard ist leer." });
         return;
       }
-      await api.writeMindboardPng(path, data);
+      await api.exportMindboardPng(`${name || "Mindboard"}.png`, data);
     } catch (e) {
       useStore.setState({ error: String(e) });
     }

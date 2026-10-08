@@ -51,6 +51,9 @@ export type PlanIndex = Record<PaneResearchKind, PlanIndexEntry[]>;
 
 const emptyPlanIndex = (): PlanIndex => ({ characters: [], locations: [] });
 
+/** Schon gemeldete unlesbare Personen-/Ortsdateien — jede nur einmal pro Projekt. */
+const reportedBrokenEntities = new Set<string>();
+
 export interface Pane {
   /** Ausgewählte Szene; im Fluss die zuletzt angesprungene. */
   sceneId: string | null;
@@ -502,6 +505,7 @@ export const useStore = create<Store>((set, get) => {
 
   const resetView = (project: ProjectInfo | null) => {
     clearImageCache();
+    reportedBrokenEntities.clear();
     set({
       project,
       panes: emptyPanes(),
@@ -883,13 +887,22 @@ export const useStore = create<Store>((set, get) => {
           api.listEntities("locations"),
         ]);
         const fromEntities = (list: typeof characters) =>
-          list.map((e) => ({ id: e.id, name: e.name, hasImage: !!e.image }));
+          list.entities.map((e) => ({ id: e.id, name: e.name, hasImage: !!e.image }));
         set({
           planIndex: {
             characters: fromEntities(characters),
             locations: fromEntities(locations),
           },
         });
+        const broken = [...characters.broken, ...locations.broken].filter(
+          (f) => !reportedBrokenEntities.has(f),
+        );
+        if (broken.length > 0) {
+          broken.forEach((f) => reportedBrokenEntities.add(f));
+          set({
+            error: `Nicht lesbar und daher ausgeblendet: ${broken.join(", ")}. Die Datei ist beschädigt oder noch nicht fertig synchronisiert.`,
+          });
+        }
       } catch {
         // Der Index ist nur Komfort — ein Fehler darf den Editor nicht stören.
       }

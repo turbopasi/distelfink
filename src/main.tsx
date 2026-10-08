@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Das Kontextmenü der WebView („Neu laden", „Untersuchen" …) hat in einer
 // Desktop-App nichts verloren. Wo die App ein eigenes Menü hat, hat sie es
@@ -14,6 +15,9 @@ window.addEventListener("contextmenu", (e) => {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    {/* Letzte Rettung, falls etwas außerhalb der einzelnen Bereiche scheitert. */}
+    <ErrorBoundary label="Distelfink">
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>,
 );

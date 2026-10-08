@@ -301,15 +301,35 @@ pub fn delete_mindboard(id: String, state: tauri::State<AppState>) -> Result<(),
     })
 }
 
-/// Schreibt den PNG-Export eines Boards an den im Speichern-Dialog
-/// gewählten Ort (außerhalb des Projekts, daher kein Projektzugriff nötig).
-#[tauri::command]
-pub fn write_mindboard_png(path: String, data_base64: String) -> Result<(), String> {
+/// Speichert den PNG-Export eines Boards. Den Ort wählt der Speichern-Dialog
+/// hier im Backend — die Oberfläche kann so keinen beliebigen Pfad
+/// beschreiben lassen. `false`, wenn der Dialog abgebrochen wurde.
+/// Asynchron, weil der Dialog blockiert, bis gewählt ist.
+#[tauri::command(async)]
+pub fn export_mindboard_png(
+    window: tauri::Window,
+    file_name: String,
+    data_base64: String,
+) -> Result<bool, String> {
     use base64::Engine;
+    use tauri_plugin_dialog::DialogExt;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&data_base64)
         .map_err(|e| format!("Bilddaten ungültig: {e}"))?;
-    fs::write(&path, bytes).map_err(|e| format!("Datei schreiben: {e}"))
+    let Some(chosen) = window
+        .dialog()
+        .file()
+        .set_parent(&window)
+        .set_title("Mindboard als Bild speichern")
+        .set_file_name(file_name)
+        .add_filter("PNG-Bild", &["png"])
+        .blocking_save_file()
+    else {
+        return Ok(false);
+    };
+    let path = chosen.into_path().map_err(|e| format!("Speicherort: {e}"))?;
+    fs::write(&path, bytes).map_err(|e| format!("Datei schreiben: {e}"))?;
+    Ok(true)
 }
 
 /// Suchtext eines Boards: Notizen, Beschriftungen, Formtitel.

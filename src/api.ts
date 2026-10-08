@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   Entity,
   EntityKind,
+  EntityList,
   ExportFormat,
   ExportTemplate,
   Mention,
@@ -57,7 +58,7 @@ export const api = {
   deleteTrashItem: (key: string) => invoke<void>("delete_trash_item", { key }),
   emptyTrash: () => invoke<void>("empty_trash"),
 
-  listEntities: (kind: EntityKind) => invoke<Entity[]>("list_entities", { kind }),
+  listEntities: (kind: EntityKind) => invoke<EntityList>("list_entities", { kind }),
   saveEntity: (kind: EntityKind, entity: Entity) =>
     invoke<Entity>("save_entity", { kind, entity }),
   /** Kopie samt Freitext-Dokument und Bild. */
@@ -103,8 +104,9 @@ export const api = {
     invoke<void>("rename_mindboard", { id, name }),
   deleteMindboard: (id: string) => invoke<void>("delete_mindboard", { id }),
   /** Schreibt einen PNG-Export (base64) an einen frei gewählten Ort. */
-  writeMindboardPng: (path: string, dataBase64: string) =>
-    invoke<void>("write_mindboard_png", { path, dataBase64 }),
+  /** Fragt im Backend nach dem Speicherort; false = abgebrochen. */
+  exportMindboardPng: (fileName: string, dataBase64: string) =>
+    invoke<boolean>("export_mindboard_png", { fileName, dataBase64 }),
 
   searchProject: (query: string) => invoke<SearchHit[]>("search_project", { query }),
 

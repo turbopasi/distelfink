@@ -17,7 +17,7 @@ export function cachedEntities(root: string | undefined, kind: EntityKind): Enti
 
 /** Lädt die Liste frisch und legt sie im Cache ab. */
 export async function loadEntities(root: string | undefined, kind: EntityKind): Promise<Entity[]> {
-  const list = await api.listEntities(kind);
+  const { entities: list } = await api.listEntities(kind);
   lists.set(keyOf(root, kind), list);
   return list;
 }

@@ -3175,6 +3175,42 @@ li.chapter > .binder-row > .binder-title {
 }
 
 /* --------------------------------------------------------------------------
+   Error Boundary — ein Bereich ist ausgefallen, der Rest läuft weiter.
+   -------------------------------------------------------------------------- */
+
+.error-boundary {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+  background: var(--status-danger-soft);
+  box-shadow: inset 3px 0 0 0 var(--status-danger);
+  min-width: 0;
+  overflow: auto;
+}
+
+.error-boundary p {
+  margin: 0;
+}
+
+.error-boundary-detail {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.error-boundary-actions button {
+  background: var(--surface-card);
+  border-color: var(--border-subtle);
+  color: var(--text-strong);
+}
+
+/* --------------------------------------------------------------------------
    Updatehinweis
    -------------------------------------------------------------------------- */
 

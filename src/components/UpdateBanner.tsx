@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { useStore } from "../store";
+import { PANE_IDS, useStore } from "../store";
 
 type Phase = "available" | "downloading" | "ready" | "failed";
+
+/** true (und Hinweis), wenn ein Bereich einen ungelösten Schreibkonflikt hat. */
+function blockedByConflict(): boolean {
+  const s = useStore.getState();
+  if (!PANE_IDS.some((id) => s.panes[id].saveState === "conflict")) return false;
+  useStore.setState({
+    error: "Bitte vor dem Update zuerst den Schreibkonflikt im betroffenen Bereich lösen.",
+  });
+  return true;
+}
 
 /** Prüft beim Start einmal auf eine neue Version und bietet das Update an.
  *
@@ -37,6 +47,7 @@ export function UpdateBanner({ floating = false }: { floating?: boolean }) {
   if (!update || dismissed) return null;
 
   const install = async () => {
+    if (blockedByConflict()) return;
     setPhase("downloading");
     setProgress(0);
     try {
@@ -55,6 +66,12 @@ export function UpdateBanner({ floating = false }: { floating?: boolean }) {
       // damit währenddessen Getipptes auch dabei ist.
       setPhase("ready");
       await useStore.getState().flushForExit("vor Update");
+      // Ein Bereich mit Schreibkonflikt wird nicht gespeichert; der
+      // Installer beendete die App, und die Änderungen wären weg.
+      if (blockedByConflict()) {
+        setPhase("available");
+        return;
+      }
       await update.install();
       // Der Neustart greift für den Fall, dass die App danach noch läuft.
       await relaunch();
