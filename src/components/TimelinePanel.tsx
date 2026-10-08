@@ -17,8 +17,9 @@ import {
 } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
-import { askLoadExternal } from "../conflict";
 import { useStore } from "../store";
+import { ConflictBanner } from "./ConflictBanner";
+import { useAutosave } from "./useAutosave";
 import { LocationLinks } from "./LocationLinks";
 import { PersonLinks } from "./PersonLinks";
 import { SceneLinks } from "./SceneLinks";
@@ -79,14 +80,46 @@ export function TimelinePanel() {
   // Panel die Ereignisse des vorigen Projekts.
   const projectRoot = useStore((s) => s.project?.root);
   const [timeline, setTimeline] = useState<Timeline | null>(null);
+  const timelineRef = useRef<Timeline | null>(null);
   const { menu, open: openMenu, openAt, close: closeMenu } = useContextMenu();
+
+  /** Zeigt einen Stand an und merkt ihn fürs Speichern vor. */
+  const show = (tl: Timeline | null) => {
+    timelineRef.current = tl;
+    setTimeline(tl);
+  };
+
+  const { status, saver } = useAutosave({
+    what: "Der Zeitstrahl",
+    // Jede Änderung ist eine abgeschlossene Aktion, kein Tippen: gleich
+    // speichern — aber nie zwei Vorgänge gleichzeitig.
+    delayMs: 0,
+    snapshot: () => timelineRef.current!,
+    write: async (tl: Timeline, force) => {
+      const result = await api.saveTimeline(tl, force);
+      // Die Antwort trägt die vom Backend vergebenen IDs und Slots — nur
+      // übernehmen, wenn seitdem nichts weiter geändert wurde.
+      if (result.status === "ok" && timelineRef.current === tl) show(result.data);
+      return result.status;
+    },
+    reload: async () => {
+      const fresh = await api.loadTimeline();
+      // Inzwischen weiter bearbeitet: das Banner entscheidet.
+      if (saver.state !== "saved") {
+        saver.raiseConflict();
+        return;
+      }
+      show(fresh);
+      saver.reset();
+    },
+  });
 
   useEffect(() => {
     let cancelled = false;
-    setTimeline(null);
+    show(null);
     void api
       .loadTimeline()
-      .then((tl) => !cancelled && setTimeline(tl))
+      .then((tl) => !cancelled && show(tl))
       .catch((e) => useStore.setState({ error: String(e) }));
     return () => {
       cancelled = true;
@@ -112,19 +145,15 @@ export function TimelinePanel() {
     return cells.get(`${trackId}#${slot}`);
   }
 
-  async function persist(next: Timeline) {
-    setTimeline(next);
+  function persist(next: Timeline) {
+    show(next);
+    saver.markDirty();
+  }
+
+  async function loadExternal() {
     try {
-      let result = await api.saveTimeline(next);
-      if (result.status === "conflict") {
-        if (await askLoadExternal("Der Zeitstrahl")) {
-          setTimeline(await api.loadTimeline());
-          return;
-        }
-        result = await api.saveTimeline(next, true);
-      }
-      // Die Antwort trägt die vom Backend vergebenen IDs und Slots.
-      if (result.status === "ok") setTimeline(result.data);
+      show(await api.loadTimeline());
+      saver.reset();
     } catch (e) {
       useStore.setState({ error: String(e) });
     }
@@ -368,6 +397,13 @@ export function TimelinePanel() {
 
   return (
     <div className="timeline">
+      {status === "conflict" && (
+        <ConflictBanner
+          what="Der Zeitstrahl"
+          onReload={() => void loadExternal()}
+          onOverwrite={() => void saver.overwrite()}
+        />
+      )}
       <div className="timeline-header">
         <h2>Zeitstrahl</h2>
         <div className="timeline-header-actions">

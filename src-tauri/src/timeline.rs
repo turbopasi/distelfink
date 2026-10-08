@@ -1,6 +1,7 @@
 //! Zeitstrahl: `timeline.json` (Reihenfolge = Array-Reihenfolge).
 
 use crate::fsutil::write_atomic;
+use crate::layout::TIMELINE_FILE;
 use crate::project::{make_id, with_project, AppState, Saved};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -62,8 +63,6 @@ pub struct Timeline {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub orientation: String,
 }
-
-const TIMELINE_FILE: &str = "timeline.json";
 
 /// Name des Strangs, in dem Ereignisse aus der Zeit vor den Strängen landen.
 const DEFAULT_TRACK_NAME: &str = "Haupthandlung";

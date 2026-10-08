@@ -60,17 +60,27 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
         throw e;
       }
     },
+    reload: async () => {
+      const fresh = await api.loadMindboard(boardId);
+      // Inzwischen weiter bearbeitet: das Banner entscheidet.
+      if (saver.state !== "saved") saver.raiseConflict();
+      else applyFresh(fresh);
+    },
   });
   const scheduleSave = useCallback(() => saver.markDirty(), [saver]);
 
+  /** Übernimmt den Stand von der Platte; der Verlauf gehört zum alten. */
+  function applyFresh(fresh: Mindboard) {
+    boardRef.current = fresh;
+    historyRef.current = new History<Mindboard>();
+    setBoard(fresh);
+    setHistoryTick((t) => t + 1);
+    saver.reset();
+  }
+
   const loadExternal = async () => {
     try {
-      const fresh = await api.loadMindboard(boardId);
-      boardRef.current = fresh;
-      historyRef.current = new History<Mindboard>();
-      setBoard(fresh);
-      setHistoryTick((t) => t + 1);
-      saver.reset();
+      applyFresh(await api.loadMindboard(boardId));
     } catch (e) {
       useStore.setState({ error: String(e) });
     }

@@ -10,21 +10,29 @@ import { useStore } from "../store";
  * Wird die Ansicht abgebaut, wird Offenes noch geschrieben. Steht dann ein
  * Konflikt offen, fragt ein Dialog nach — das Banner ist ja nicht mehr zu
  * sehen, und stumm verwerfen soll die App die Arbeit nicht.
+ *
+ * `reload` läuft nach „Projekt neu laden“: das Backend kennt danach nur noch
+ * den neuen Stand der Datei, ein veralteter Stand in der Ansicht würde beim
+ * nächsten Speichern also ohne Konfliktmeldung darübergeschrieben. Mit offenem
+ * Konflikt bleibt der eigene Stand stehen, bis entschieden ist.
  */
 export function useAutosave<T>({
   what,
   delayMs,
   snapshot,
   write,
+  reload,
 }: {
   /** Für die Rückfrage beim Abbau, als Satzanfang („Das Dokument „Anna““). */
   what: string;
   delayMs: number;
   snapshot: () => T;
   write: (value: T, force: boolean) => Promise<WriteOutcome>;
+  /** Liest den Stand von der Platte neu und übernimmt ihn per `saver.reset()`. */
+  reload?: () => Promise<void>;
 }) {
-  const latest = useRef({ what, snapshot, write });
-  latest.current = { what, snapshot, write };
+  const latest = useRef({ what, snapshot, write, reload });
+  latest.current = { what, snapshot, write, reload };
   const [status, setStatus] = useState<SaveStatus>("saved");
   const [saver] = useState(
     () =>
@@ -46,6 +54,16 @@ export function useAutosave<T>({
       void settleOnLeave(saver, latest.current.what);
     };
   }, [saver]);
+
+  const reloadCount = useStore((s) => s.reloadCount);
+  const seenReload = useRef(reloadCount);
+  useEffect(() => {
+    if (seenReload.current === reloadCount) return;
+    seenReload.current = reloadCount;
+    const run = latest.current.reload;
+    if (!run || saver.state === "conflict") return;
+    run().catch((e) => useStore.setState({ error: String(e) }));
+  }, [reloadCount, saver]);
 
   return { status, saver };
 }

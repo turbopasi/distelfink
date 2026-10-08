@@ -128,6 +128,9 @@ export interface ProjectSlice {
   deleteNode: (id: string) => Promise<void>;
   checkExternalChanges: () => Promise<void>;
   reloadProject: () => Promise<void>;
+  /** Erhöht sich bei „Projekt neu laden“: Ansichten mit eigenem Stand
+   *  (Zeitstrahl, Mindboard, Personen/Orte) lesen dann neu (`useAutosave`). */
+  reloadCount: number;
   /** Kurzes Feedback nach manuellem Sicherungspunkt (Titelleiste). */
   snapshotNotice: string | null;
   /** Sicherungspunkt über das ganze Projekt; ohne message automatisch (still). */
@@ -182,6 +185,7 @@ export function createProjectSlice(set: SetState, get: GetState): ProjectSlice {
     externalChanges: [],
     sceneStats: {},
     collapsedIds: [],
+    reloadCount: 0,
 
     createProject: async (parentDir, name, author) => {
       try {
@@ -396,7 +400,7 @@ export function createProjectSlice(set: SetState, get: GetState): ProjectSlice {
       await get().flushAll();
       try {
         const project = await api.openProject(root);
-        set({ project, externalChanges: [] });
+        set((s) => ({ project, externalChanges: [], reloadCount: s.reloadCount + 1 }));
         void get().refreshSceneStats();
         // Offene Szenen neu einlesen (außer bei ungelöstem Konflikt).
         for (const paneId of PANE_IDS) {

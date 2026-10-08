@@ -119,6 +119,21 @@ function DocEditorInstance({
       if (result.status === "ok") contentCache.set(docKey, content);
       return result.status;
     },
+    reload: async () => {
+      const disk = await read();
+      contentCache.set(docKey, disk);
+      const ed = editorRef.current;
+      if (!ed) return;
+      // Inzwischen weitergetippt: das Banner entscheidet.
+      if (saver.state !== "saved") {
+        saver.raiseConflict();
+        return;
+      }
+      if (disk !== getMarkdown(ed)) {
+        ed.chain().setMeta("addToHistory", false).setContent(disk, { emitUpdate: false }).run();
+      }
+      saver.reset();
+    },
   });
 
   const editor = useEditor({
