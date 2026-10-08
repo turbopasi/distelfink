@@ -1,11 +1,13 @@
+mod entities;
 mod export;
 mod fsutil;
 mod images;
+mod mentions;
 mod mindboard;
 mod project;
-mod research;
 mod search;
 mod settings;
+mod timeline;
 mod trash;
 mod versioning;
 
@@ -38,21 +40,21 @@ pub fn run() {
             trash::restore_trash,
             trash::delete_trash_item,
             trash::empty_trash,
-            research::list_entities,
-            research::save_entity,
-            research::duplicate_entity,
-            research::delete_entity,
-            research::set_entity_image,
-            research::get_entity_image,
-            research::update_entity_meta,
-            research::read_entity_doc,
-            research::write_entity_doc,
-            research::save_doc_image,
-            research::import_doc_image,
-            research::read_doc_image,
-            research::list_mentions,
-            research::load_timeline,
-            research::save_timeline,
+            entities::list_entities,
+            entities::save_entity,
+            entities::duplicate_entity,
+            entities::delete_entity,
+            entities::set_entity_image,
+            entities::get_entity_image,
+            entities::update_entity_meta,
+            entities::read_entity_doc,
+            entities::write_entity_doc,
+            images::save_doc_image,
+            images::import_doc_image,
+            images::read_doc_image,
+            mentions::list_mentions,
+            timeline::load_timeline,
+            timeline::save_timeline,
             mindboard::list_mindboards,
             mindboard::create_mindboard,
             mindboard::load_mindboard,

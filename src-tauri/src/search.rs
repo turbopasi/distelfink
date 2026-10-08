@@ -71,7 +71,7 @@ fn fill_index(p: &OpenProject, conn: &Connection) -> Result<(), String> {
             let Ok(raw) = fs::read_to_string(&path) else {
                 continue;
             };
-            let Ok(entity) = serde_json::from_str::<crate::research::Entity>(&raw) else {
+            let Ok(entity) = serde_json::from_str::<crate::entities::Entity>(&raw) else {
                 continue;
             };
             let mut body = entity.description.clone();

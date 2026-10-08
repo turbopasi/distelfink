@@ -1,7 +1,10 @@
-//! Bildformate, die Distelfink annimmt, und ihre Auslieferung an die
-//! Oberfläche als data-URL (vermeidet Asset-Protocol-Scopes).
+//! Bildformate, die Distelfink annimmt, ihre Auslieferung an die Oberfläche
+//! als data-URL (vermeidet Asset-Protocol-Scopes) und die Bilder in Dokumenten
+//! (`images/`).
 
+use crate::project::{make_id, with_project, AppState};
 use base64::Engine;
+use std::fs;
 use std::path::Path;
 
 const IMAGE_EXTS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
@@ -84,6 +87,76 @@ fn shrink(bytes: &[u8]) -> Option<(Vec<u8>, &'static str)> {
 pub(crate) fn data_url(bytes: &[u8], ext: &str) -> String {
     let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
     format!("data:{};base64,{b64}", mime(ext))
+}
+
+// ---------------------------------------------------------------------------
+// Dokument-Bilder (inline in Szenen und Recherche-Dokumenten)
+// ---------------------------------------------------------------------------
+
+/// Speichert ein eingefügtes Bild (z. B. Screenshot aus der Zwischenablage)
+/// unter `images/` und liefert den projektrelativen Pfad fürs Markdown.
+#[tauri::command]
+pub fn save_doc_image(
+    data_base64: String,
+    ext: String,
+    state: tauri::State<AppState>,
+) -> Result<String, String> {
+    let ext = ext.to_lowercase();
+    if !is_image_ext(&ext) {
+        return Err(format!("Nicht unterstütztes Bildformat: .{ext}"));
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&data_base64)
+        .map_err(|e| format!("Bilddaten ungültig: {e}"))?;
+    with_project(&state, |p| {
+        fs::create_dir_all(p.abs("images")).map_err(|e| format!("images anlegen: {e}"))?;
+        let id = make_id("bild");
+        let rel = format!("images/{id}.{ext}");
+        fs::write(p.abs(&rel), &bytes).map_err(|e| format!("{rel} schreiben: {e}"))?;
+        Ok(rel)
+    })
+}
+
+/// Kopiert eine Bilddatei (Dateidialog) nach `images/` und liefert den
+/// projektrelativen Pfad — Gegenstück zu `save_doc_image` für die Zwischenablage.
+#[tauri::command]
+pub fn import_doc_image(
+    source_path: String,
+    state: tauri::State<AppState>,
+) -> Result<String, String> {
+    let ext = image_ext_of(&source_path)?;
+    with_project(&state, |p| {
+        fs::create_dir_all(p.abs("images")).map_err(|e| format!("images anlegen: {e}"))?;
+        let id = make_id("bild");
+        let rel = format!("images/{id}.{ext}");
+        fs::copy(&source_path, p.abs(&rel)).map_err(|e| format!("Bild kopieren: {e}"))?;
+        Ok(rel)
+    })
+}
+
+/// Liefert ein Dokument-Bild als data-URL (base64) — vermeidet Asset-Protocol-Scopes.
+/// Wie alle reinen Lese-Commands abseits des Hauptthreads: Schreibende
+/// Commands bleiben synchron, damit ihre Reihenfolge erhalten bleibt.
+#[tauri::command(async)]
+pub fn read_doc_image(
+    rel: String,
+    state: tauri::State<AppState>,
+) -> Result<Option<String>, String> {
+    if !rel.starts_with("images/") || rel.contains("..") || rel.contains('\\') {
+        return Err(format!("Ungültiger Bildpfad: {rel}"));
+    }
+    let ext = ext_lower(&rel);
+    if !is_image_ext(&ext) {
+        return Err(format!("Ungültiger Bildpfad: {rel}"));
+    }
+    // Nur den Pfad unter dem Lock holen — ein großes Bild blockiert sonst
+    // das Speichern und Laden der Texte.
+    let path = with_project(&state, |p| Ok(p.abs(&rel)))?;
+    let bytes = match fs::read(path) {
+        Ok(b) => b,
+        Err(_) => return Ok(None),
+    };
+    Ok(Some(data_url(&bytes, &ext)))
 }
 
 #[cfg(test)]
