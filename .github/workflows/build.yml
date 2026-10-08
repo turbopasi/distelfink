@@ -53,8 +53,8 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: npm run lint
 
-      # Vor dem teuren Build: die Roundtrip-Tests des Editors (Markdown,
-      # Ausrichtung, Planungs-Tags, Mindboard-Modell).
+      # Vor dem teuren Build: vitest (Editor-Roundtrips, Fluss, Speichern,
+      # Mindboard-Modell, Store).
       - name: Frontend tests
         run: npm test
 

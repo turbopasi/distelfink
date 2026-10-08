@@ -58,8 +58,9 @@ npm run tauri build   # Release-Build (.exe/.msi bzw. .AppImage/.deb)
 npm run build         # nur Frontend, inklusive Typprüfung
 npm run notices       # THIRD-PARTY-NOTICES.md neu erzeugen
 
-npx tsx scripts/align-roundtrip.test.mts
-npx tsx scripts/plan-tag-roundtrip.test.mts
+npm test              # Frontend-Tests (vitest)
+npm run lint          # ESLint, u. a. Hook-Abhängigkeiten
+cd src-tauri && cargo test && cargo clippy --all-targets && cargo fmt --check
 ```
 
 Ein Push auf `main` löst die CI aus (Windows + Linux). Reine Text-Änderungen
