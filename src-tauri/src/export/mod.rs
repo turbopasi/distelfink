@@ -42,6 +42,17 @@ pub enum ExportFormat {
 }
 
 impl ExportFormat {
+    /// Für den Dateifilter im Speichern-Dialog.
+    fn label(self) -> &'static str {
+        match self {
+            ExportFormat::Docx => "Word (DOCX)",
+            ExportFormat::Pdf => "PDF",
+            ExportFormat::Epub => "ePub (E-Book)",
+            ExportFormat::Markdown => "Markdown",
+            ExportFormat::Txt => "Reiner Text (TXT)",
+        }
+    }
+
     fn extension(self) -> &'static str {
         match self {
             ExportFormat::Docx => "docx",
@@ -53,18 +64,27 @@ impl ExportFormat {
     }
 }
 
-/// Exportiert die ausgewählten Binder-Teile in `out_path`.
+/// Fragt nach dem Speicherort und exportiert die ausgewählten Binder-Teile
+/// dorthin; liefert den geschriebenen Pfad (None = abgebrochen).
 /// Die Vorlage kommt komplett vom Frontend — so wirken auch ungespeicherte
 /// Anpassungen aus dem Export-Dialog.
 #[tauri::command(async)]
 pub fn export_project(
+    window: tauri::Window,
     format: ExportFormat,
     template: ExportTemplate,
     include_ids: Vec<String>,
-    out_path: String,
     state: tauri::State<AppState>,
-) -> Result<String, String> {
+) -> Result<Option<String>, String> {
     let p = &detached_project(&state)?;
+    let ext = format.extension();
+    let file_name = format!("{}.{ext}", p.meta.title);
+    let filter = (format.label(), ext);
+    let Some(mut path) =
+        crate::dialogs::pick_save(&window, "Exportieren als …", &file_name, filter)?
+    else {
+        return Ok(None);
+    };
     catch_panic("Der Export", || {
         let include: HashSet<String> = include_ids.into_iter().collect();
         let chapters = compile_chapters(p, &include, &template)?;
@@ -72,8 +92,6 @@ pub fn export_project(
         let author = p.meta.author.clone();
 
         // Endung sicherstellen (Save-Dialoge liefern sie nicht auf jeder Plattform).
-        let ext = format.extension();
-        let mut path = std::path::PathBuf::from(&out_path);
         if path.extension().map(|e| e.to_string_lossy().to_lowercase()) != Some(ext.into()) {
             path.set_extension(ext);
         }
@@ -91,7 +109,7 @@ pub fn export_project(
             ExportFormat::Epub => write_epub(&chapters, &template, &title, &author, &path)?,
             ExportFormat::Pdf => write_pdf(&chapters, &template, &title, &author, &path)?,
         }
-        Ok(path.to_string_lossy().into_owned())
+        Ok(Some(path.to_string_lossy().into_owned()))
     })
 }
 

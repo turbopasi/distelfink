@@ -402,19 +402,23 @@ pub(crate) fn load(p: &OpenProject, kind: EntityKind, id: &str) -> Result<Entity
     serde_json::from_str(&raw).map_err(|e| format!("{rel} ungültig: {e}"))
 }
 
-/// Übernimmt ein Bild in den Entity-Ordner, auf Vorschaugröße verkleinert —
-/// das Original bräuchte bei jedem Öffnen unnötig lange über die IPC.
-/// Lesen und Verkleinern laufen außerhalb des Locks.
+/// Fragt nach einem Bild und übernimmt es in den Entity-Ordner, auf
+/// Vorschaugröße verkleinert — das Original bräuchte bei jedem Öffnen unnötig
+/// lange über die IPC. None = abgebrochen. Lesen und Verkleinern laufen
+/// außerhalb des Locks.
 #[tauri::command(async)]
 pub fn set_entity_image(
+    window: tauri::Window,
     kind: EntityKind,
     id: String,
-    source_path: String,
     state: tauri::State<AppState>,
-) -> Result<Entity, String> {
+) -> Result<Option<Entity>, String> {
     validate_id(&id)?;
-    let ext = images::image_ext_of(&source_path)?;
-    let original = fs::read(&source_path).map_err(|e| format!("Bild lesen: {e}"))?;
+    let Some(source) = crate::dialogs::pick_image(&window, "Bild wählen")? else {
+        return Ok(None);
+    };
+    let ext = images::image_ext_of(&source.to_string_lossy())?;
+    let original = fs::read(&source).map_err(|e| format!("Bild lesen: {e}"))?;
     let (bytes, ext) = match images::shrink_to_preview(&original) {
         Some((small, small_ext)) => (small, small_ext.to_string()),
         None => (original, ext),
@@ -422,7 +426,7 @@ pub fn set_entity_image(
     with_project(&state, |p| {
         let mut entity = load(p, kind, &id)?;
         store_entity_image(p, kind, &mut entity, &bytes, &ext)?;
-        Ok(entity)
+        Ok(Some(entity))
     })
 }
 

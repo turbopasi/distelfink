@@ -74,15 +74,18 @@ fn background_file(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String
     Ok(background_dir(app)?.join(name))
 }
 
-/// Kopiert eine Bilddatei (Dateidialog) ins App-Config-Verzeichnis und liefert
-/// ihren Dateinamen. Ältere Hintergrundbilder werden dabei entfernt — es gibt
-/// immer nur eines.
-#[tauri::command]
+/// Fragt nach einer Bilddatei, kopiert sie ins App-Config-Verzeichnis und
+/// liefert ihren Dateinamen (None = abgebrochen). Ältere Hintergrundbilder
+/// werden dabei entfernt — es gibt immer nur eines.
+#[tauri::command(async)]
 pub fn import_background_image(
     app: tauri::AppHandle,
-    source_path: String,
-) -> Result<String, String> {
-    let ext = images::image_ext_of(&source_path)?;
+    window: tauri::Window,
+) -> Result<Option<String>, String> {
+    let Some(source) = crate::dialogs::pick_image(&window, "Hintergrundbild wählen")? else {
+        return Ok(None);
+    };
+    let ext = images::image_ext_of(&source.to_string_lossy())?;
     let dir = background_dir(&app)?;
     // Zeitstempel im Namen: so lädt die Anzeige nach einem Wechsel garantiert
     // das neue Bild und nicht den zwischengespeicherten Vorgänger.
@@ -91,9 +94,9 @@ pub fn import_background_image(
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let name = format!("hintergrund-{stamp}.{ext}");
-    fs::copy(&source_path, dir.join(&name)).map_err(|e| format!("Bild kopieren: {e}"))?;
+    fs::copy(&source, dir.join(&name)).map_err(|e| format!("Bild kopieren: {e}"))?;
     remove_other_backgrounds(&dir, &name);
-    Ok(name)
+    Ok(Some(name))
 }
 
 /// Liefert das Hintergrundbild als data-URL (None, wenn die Datei fehlt).

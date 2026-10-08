@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import {
   COLOR_FIELDS,
@@ -160,14 +159,9 @@ function BackgroundEditor() {
   }, [bg.image]);
 
   async function chooseImage() {
-    const file = await open({
-      title: "Hintergrundbild wählen",
-      filters: [{ name: "Bilder", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
-    });
-    if (typeof file !== "string") return;
     try {
-      const name = await api.importBackgroundImage(file);
-      patch({ image: name });
+      const name = await api.importBackgroundImage();
+      if (name) patch({ image: name });
     } catch (e) {
       useStore.setState({ error: String(e) });
     }

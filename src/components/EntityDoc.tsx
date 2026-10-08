@@ -2,7 +2,7 @@
 // Szenen-Verknüpfungen) + TipTap-Editor für den Freitext darunter.
 
 import { useEffect, useState } from "react";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { useStore, type PaneId } from "../store";
 import { DocEditor } from "./DocEditor";
@@ -68,13 +68,8 @@ export function EntityDoc({
   }
 
   async function chooseImage() {
-    const file = await open({
-      title: "Bild wählen",
-      filters: [{ name: "Bilder", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
-    });
-    if (typeof file !== "string") return;
     try {
-      await api.setEntityImage(kind, entity.id, file);
+      if (!(await api.setEntityImage(kind, entity.id))) return;
       const img = await api.getEntityImage(kind, entity.id);
       imageCache.set(imageKey, img);
       setImage(img);

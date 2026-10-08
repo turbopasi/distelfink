@@ -38,6 +38,8 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -50,6 +52,12 @@ jobs:
       # Ausrichtung, Planungs-Tags, Mindboard-Modell).
       - name: Frontend tests
         run: npm test
+
+      # Formatierung ist einheitlich (rustfmt) und soll es bleiben.
+      - name: Rust formatting
+        if: matrix.platform == 'ubuntu-22.04'
+        working-directory: src-tauri
+        run: cargo fmt --check
 
       # Einmal reicht — die Rust-Logik ist plattformunabhängig, und jeder
       # Testlauf kompiliert das Backend ein zweites Mal (Debug-Profil).

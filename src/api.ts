@@ -66,8 +66,9 @@ export const api = {
     invoke<Entity>("duplicate_entity", { kind, id }),
   deleteEntity: (kind: EntityKind, id: string) =>
     invoke<void>("delete_entity", { kind, id }),
-  setEntityImage: (kind: EntityKind, id: string, sourcePath: string) =>
-    invoke<Entity>("set_entity_image", { kind, id, sourcePath }),
+  /** Fragt im Backend nach dem Bild; null = abgebrochen. */
+  setEntityImage: (kind: EntityKind, id: string) =>
+    invoke<Entity | null>("set_entity_image", { kind, id }),
   getEntityImage: (kind: EntityKind, id: string) =>
     invoke<string | null>("get_entity_image", { kind, id }),
 
@@ -86,8 +87,8 @@ export const api = {
   saveDocImage: (dataBase64: string, ext: string) =>
     invoke<string>("save_doc_image", { dataBase64, ext }),
   /** Kopiert eine Bilddatei (Dateidialog) nach images/; liefert den relativen Pfad. */
-  importDocImage: (sourcePath: string) =>
-    invoke<string>("import_doc_image", { sourcePath }),
+  /** Fragt im Backend nach dem Bild; null = abgebrochen. */
+  importDocImage: (title: string) => invoke<string | null>("import_doc_image", { title }),
   /** Dokument-Bild als data-URL (null, wenn die Datei fehlt). */
   readDocImage: (rel: string) => invoke<string | null>("read_doc_image", { rel }),
 
@@ -130,20 +131,18 @@ export const api = {
   deleteExportTemplate: (id: string) =>
     invoke<ExportTemplate[]>("delete_export_template", { id }),
   /** Exportiert die ausgewählten Binder-Teile; liefert den finalen Dateipfad. */
-  exportProject: (
-    format: ExportFormat,
-    template: ExportTemplate,
-    includeIds: string[],
-    outPath: string,
-  ) => invoke<string>("export_project", { format, template, includeIds, outPath }),
+  /** Fragt im Backend nach dem Speicherort; liefert den geschriebenen Pfad,
+   *  null = abgebrochen. */
+  exportProject: (format: ExportFormat, template: ExportTemplate, includeIds: string[]) =>
+    invoke<string | null>("export_project", { format, template, includeIds }),
 
   /** App-weite Einstellungen (Phase 7); Schema gehört dem Frontend. */
   loadSettings: () => invoke<unknown>("load_settings"),
   saveSettings: (settings: unknown) => invoke<void>("save_settings", { settings }),
 
   /** Kopiert ein Hintergrundbild ins App-Config-Verzeichnis; liefert den Dateinamen. */
-  importBackgroundImage: (sourcePath: string) =>
-    invoke<string>("import_background_image", { sourcePath }),
+  /** Fragt im Backend nach dem Bild; null = abgebrochen. */
+  importBackgroundImage: () => invoke<string | null>("import_background_image"),
   /** Hintergrundbild als data-URL (null, wenn die Datei fehlt). */
   readBackgroundImage: (name: string) =>
     invoke<string | null>("read_background_image", { name }),

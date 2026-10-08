@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api } from "../api";
 import { LANGUAGE_OPTIONS } from "../settings";
@@ -25,13 +24,6 @@ function allIds(nodes: BinderNode[]): string[] {
 }
 
 const FORMATS: ExportFormat[] = ["docx", "pdf", "epub", "markdown", "txt"];
-const FORMAT_EXT: Record<ExportFormat, string> = {
-  docx: "docx",
-  pdf: "pdf",
-  epub: "epub",
-  markdown: "md",
-  txt: "txt",
-};
 
 function ExportDialog() {
   const project = useStore((s) => s.project)!;
@@ -127,17 +119,10 @@ function ExportDialog() {
     if (!tpl || busy) return;
     setError(null);
     setDone(null);
-    const ext = FORMAT_EXT[format];
-    const path = await save({
-      title: "Exportieren als …",
-      defaultPath: `${project.meta.title}.${ext}`,
-      filters: [{ name: EXPORT_FORMAT_LABEL[format], extensions: [ext] }],
-    });
-    if (!path) return;
     setBusy(true);
     try {
-      const written = await api.exportProject(format, tpl, [...included], path);
-      setDone(written);
+      const written = await api.exportProject(format, tpl, [...included]);
+      if (written) setDone(written);
     } catch (e) {
       setError(String(e));
     } finally {

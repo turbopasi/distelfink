@@ -1,5 +1,4 @@
 import { useState, type ClipboardEvent, type DragEvent } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { useStore } from "../store";
 import { findNode, findParentAndIndex } from "../tree";
@@ -197,14 +196,9 @@ function Card({ node, parentId }: { node: BinderNode; parentId: string }) {
   }
 
   async function chooseImage() {
-    const file = await open({
-      title: "Kartenbild wählen",
-      filters: [{ name: "Bilder", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
-    });
-    if (typeof file !== "string") return;
     try {
-      const rel = await api.importDocImage(file);
-      await updateNodeMeta(node.id, { image: rel });
+      const rel = await api.importDocImage("Kartenbild wählen");
+      if (rel) await updateNodeMeta(node.id, { image: rel });
     } catch (e) {
       useStore.setState({ error: String(e) });
     }

@@ -8,7 +8,7 @@ use base64::Engine;
 use std::fs;
 use std::path::Path;
 
-const IMAGE_EXTS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
+pub(crate) const IMAGE_EXTS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
 
 /// true für eine der unterstützten Endungen (klein geschrieben).
 pub(crate) fn is_image_ext(ext: &str) -> bool {
@@ -118,20 +118,25 @@ pub fn save_doc_image(
     })
 }
 
-/// Kopiert eine Bilddatei (Dateidialog) nach `images/` und liefert den
-/// projektrelativen Pfad — Gegenstück zu `save_doc_image` für die Zwischenablage.
-#[tauri::command]
+/// Fragt nach einer Bilddatei, kopiert sie nach `images/` und liefert den
+/// projektrelativen Pfad (None = abgebrochen) — Gegenstück zu
+/// `save_doc_image` für die Zwischenablage.
+#[tauri::command(async)]
 pub fn import_doc_image(
-    source_path: String,
+    window: tauri::Window,
+    title: String,
     state: tauri::State<AppState>,
-) -> Result<String, String> {
-    let ext = image_ext_of(&source_path)?;
+) -> Result<Option<String>, String> {
+    let Some(source) = crate::dialogs::pick_image(&window, &title)? else {
+        return Ok(None);
+    };
+    let ext = image_ext_of(&source.to_string_lossy())?;
     with_project(&state, |p| {
         fs::create_dir_all(p.abs(IMAGES_DIR)).map_err(|e| format!("{IMAGES_DIR} anlegen: {e}"))?;
         let id = make_id("bild");
         let rel = format!("{IMAGES_DIR}/{id}.{ext}");
-        fs::copy(&source_path, p.abs(&rel)).map_err(|e| format!("Bild kopieren: {e}"))?;
-        Ok(rel)
+        fs::copy(&source, p.abs(&rel)).map_err(|e| format!("Bild kopieren: {e}"))?;
+        Ok(Some(rel))
     })
 }
 

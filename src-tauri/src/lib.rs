@@ -1,3 +1,4 @@
+mod dialogs;
 mod entities;
 mod export;
 mod fsutil;

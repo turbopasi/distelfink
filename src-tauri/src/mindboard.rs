@@ -323,24 +323,14 @@ pub fn export_mindboard_png(
     data_base64: String,
 ) -> Result<bool, String> {
     use base64::Engine;
-    use tauri_plugin_dialog::DialogExt;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&data_base64)
         .map_err(|e| format!("Bilddaten ungültig: {e}"))?;
-    let Some(chosen) = window
-        .dialog()
-        .file()
-        .set_parent(&window)
-        .set_title("Mindboard als Bild speichern")
-        .set_file_name(file_name)
-        .add_filter("PNG-Bild", &["png"])
-        .blocking_save_file()
+    let title = "Mindboard als Bild speichern";
+    let Some(path) = crate::dialogs::pick_save(&window, title, &file_name, ("PNG-Bild", "png"))?
     else {
         return Ok(false);
     };
-    let path = chosen
-        .into_path()
-        .map_err(|e| format!("Speicherort: {e}"))?;
     fs::write(&path, bytes).map_err(|e| format!("Datei schreiben: {e}"))?;
     Ok(true)
 }
