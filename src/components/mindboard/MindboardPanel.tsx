@@ -3,9 +3,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
-import { askLoadExternal } from "../../conflict";
-import { extraFlushers, useStore, type PaneId } from "../../store";
+import { useStore, type PaneId } from "../../store";
 import type { MindView, Mindboard } from "../../types";
+import { ConflictBanner } from "../ConflictBanner";
+import { useAutosave } from "../useAutosave";
 import { BoardCanvas } from "./BoardCanvas";
 import { History } from "./model";
 import { loadView, storeView } from "./viewMemory";
@@ -28,52 +29,52 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
   const viewRef = useRef<MindView | null>(null);
   const historyRef = useRef(new History<Mindboard>());
   const [, setHistoryTick] = useState(0);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const version = useStore((s) => s.mindboardVersion);
   const root = useStore((s) => s.project?.root ?? "");
   const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [name, setName] = useState("");
 
-  // Solange die Konfliktfrage offen ist, wartet jedes weitere Speichern auf
-  // die Antwort — sonst stapeln sich Dialoge.
-  const conflictOpen = useRef<Promise<void> | null>(null);
+  // Vor `useAutosave`: Effekte räumen in Reihenfolge auf, und das letzte
+  // Speichern beim Aushängen soll schon wissen, dass das Board zu ist.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
-  const save = useCallback(async () => {
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = null;
-    }
-    if (conflictOpen.current) return conflictOpen.current;
-    const current = boardRef.current;
-    if (!current) return;
+  const { status, saver } = useAutosave({
+    what: `Das Mindboard „${name}“`,
+    delayMs: SAVE_DELAY_MS,
     // Die Ansicht lebt in viewMemory, nicht in der Datei (auch eine alte
     // `view` aus früheren Versionen verschwindet so beim nächsten Speichern).
-    const latest = () => ({ ...(boardRef.current ?? current), view: null });
-    const result = await api.saveMindboard(latest());
-    if (result.status === "ok") return;
-
-    conflictOpen.current = (async () => {
-      if (await askLoadExternal(`Das Mindboard „${current.name}“`)) {
-        const fresh = await api.loadMindboard(boardId);
-        boardRef.current = fresh;
-        historyRef.current = new History<Mindboard>();
-        setBoard(fresh);
-        setHistoryTick((t) => t + 1);
-      } else {
-        await api.saveMindboard(latest(), true);
+    snapshot: () => ({ ...boardRef.current!, view: null }),
+    write: async (b: Mindboard, force) => {
+      try {
+        return (await api.saveMindboard(b, force)).status;
+      } catch (e) {
+        // Beim Löschen wird das Board erst geschlossen, dann entfernt — das
+        // letzte Speichern kann danach ankommen. Das ist kein Fehler.
+        if (!mounted.current && String(e).includes("existiert nicht mehr")) return "ok";
+        throw e;
       }
-    })().finally(() => {
-      conflictOpen.current = null;
-    });
-    return conflictOpen.current;
-  }, [boardId]);
+    },
+  });
+  const scheduleSave = useCallback(() => saver.markDirty(), [saver]);
 
-  const scheduleSave = useCallback(() => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      void save().catch((e) => useStore.setState({ error: String(e) }));
-    }, SAVE_DELAY_MS);
-  }, [save]);
+  const loadExternal = async () => {
+    try {
+      const fresh = await api.loadMindboard(boardId);
+      boardRef.current = fresh;
+      historyRef.current = new History<Mindboard>();
+      setBoard(fresh);
+      setHistoryTick((t) => t + 1);
+      saver.reset();
+    } catch (e) {
+      useStore.setState({ error: String(e) });
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -113,22 +114,15 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
     };
   }, [version, boardId]);
 
-  // Offene Änderungen beim Schließen des Panes und vor Projektwechseln sichern.
+  // Die zuletzt gemeldete Ansicht beim Schließen noch merken.
   useEffect(() => {
-    const flush = async () => {
-      if (saveTimer.current) await save().catch(() => {});
-    };
-    extraFlushers.add(flush);
     return () => {
-      extraFlushers.delete(flush);
-      // Gelöschte Boards lehnt das Backend ab — das ist hier kein Fehler.
-      void flush();
       if (viewTimer.current) {
         clearTimeout(viewTimer.current);
         if (viewRef.current) storeView(root, boardId, viewRef.current);
       }
     };
-  }, [save, root, boardId]);
+  }, [root, boardId]);
 
   const update = useCallback(
     (next: Mindboard, opts: UpdateOptions = {}) => {
@@ -177,18 +171,27 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
   }
 
   return (
-    <BoardCanvas
-      board={board}
-      name={name}
-      paneId={paneId}
-      update={update}
-      getBoard={() => boardRef.current!}
-      initialView={viewRef.current}
-      onViewChange={onViewChange}
-      undo={() => step("undo")}
-      redo={() => step("redo")}
-      canUndo={historyRef.current.canUndo}
-      canRedo={historyRef.current.canRedo}
-    />
+    <>
+      {status === "conflict" && (
+        <ConflictBanner
+          what={`Das Mindboard „${name}“`}
+          onReload={() => void loadExternal()}
+          onOverwrite={() => void saver.overwrite()}
+        />
+      )}
+      <BoardCanvas
+        board={board}
+        name={name}
+        paneId={paneId}
+        update={update}
+        getBoard={() => boardRef.current!}
+        initialView={viewRef.current}
+        onViewChange={onViewChange}
+        undo={() => step("undo")}
+        redo={() => step("redo")}
+        canUndo={historyRef.current.canUndo}
+        canRedo={historyRef.current.canRedo}
+      />
+    </>
   );
 }

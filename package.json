@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "notices": "tsx scripts/generate-third-party-notices.mts",
-    "test": "tsx scripts/align-roundtrip.test.mts && tsx scripts/plan-tag-roundtrip.test.mts && tsx scripts/mindboard.test.mts"
+    "test": "tsx scripts/align-roundtrip.test.mts && tsx scripts/plan-tag-roundtrip.test.mts && tsx scripts/mindboard.test.mts && tsx scripts/saving.test.mts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",

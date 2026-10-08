@@ -1,7 +1,9 @@
 import { ask } from "@tauri-apps/plugin-dialog";
 
-/** Fragt nach, wenn eine als Ganzes gespeicherte Datei (Zeitstrahl, Mindboard)
- *  seit dem Laden von außen geändert wurde. true = externe Version laden.
+/** Fragt nach, wenn eine Datei seit dem Laden von außen geändert wurde und
+ *  kein Banner (mehr) zu sehen ist: beim Zeitstrahl, und wenn eine Ansicht mit
+ *  offenem Konflikt geschlossen wird (siehe `useAutosave`).
+ *  true = externe Version laden.
  *
  *  Schließen des Dialogs zählt als „eigene Version behalten": so verhielt sich
  *  die App vor der Konfliktprüfung, und die eigene Arbeit liegt sichtbar vor

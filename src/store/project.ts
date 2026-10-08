@@ -10,8 +10,10 @@ import type { GetState, SetState } from ".";
 import {
   emptyPane,
   emptyPanes,
+  hasOpenConflict,
   paneOps,
   PANE_IDS,
+  resetPaneSavers,
   sceneView,
   type PaneId,
   type PaneResearchKind,
@@ -134,14 +136,14 @@ export interface ProjectSlice {
 }
 
 export function createProjectSlice(set: SetState, get: GetState): ProjectSlice {
-  const { patchPane, fail, openScene, resyncFlows } = paneOps(set, get);
+  const { replacePane, fail, openScene, resyncFlows } = paneOps(set, get);
 
   /** Verlässt das offene Projekt geordnet: alles Offene speichern und einen
    *  Sicherungspunkt setzen. false, wenn ein ungelöster Schreibkonflikt das
    *  verhindert — dessen lokale Änderungen gingen sonst stumm verloren. */
   const leaveProject = async (): Promise<boolean> => {
     if (!get().project) return true;
-    if (PANE_IDS.some((id) => get().panes[id].saveState === "conflict")) {
+    if (hasOpenConflict(get())) {
       set({ error: "Bitte zuerst den Schreibkonflikt im betroffenen Bereich lösen." });
       return false;
     }
@@ -153,6 +155,7 @@ export function createProjectSlice(set: SetState, get: GetState): ProjectSlice {
   const resetView = (project: ProjectInfo | null) => {
     clearImageCache();
     reportedBrokenEntities.clear();
+    resetPaneSavers();
     set({
       project,
       panes: emptyPanes(),
@@ -368,7 +371,7 @@ export function createProjectSlice(set: SetState, get: GetState): ProjectSlice {
           if (sceneView(get().panes[paneId])?.flowIds.length) continue; // übernimmt resyncFlows
           const ref = binderRef(paneId);
           if (ref && !findNode(project.meta.binder, ref)) {
-            patchPane(paneId, emptyPane());
+            replacePane(paneId, emptyPane());
           }
         }
         get().touchTrash();
@@ -401,7 +404,7 @@ export function createProjectSlice(set: SetState, get: GetState): ProjectSlice {
           if (!ref) continue;
           const pane = get().panes[paneId];
           if (!findNode(project.meta.binder, ref)) {
-            patchPane(paneId, emptyPane());
+            replacePane(paneId, emptyPane());
           } else if (pane.view.kind === "scene" && pane.saveState !== "conflict") {
             // Auch der Fluss wird über openScene neu aufgebaut (Kapitel kann
             // sich extern geändert haben).
@@ -447,11 +450,7 @@ export function createProjectSlice(set: SetState, get: GetState): ProjectSlice {
             // Im Fluss steckt die Szene mitten im Dokument — komplett neu bauen.
             await openScene(paneId, v.sceneId);
           } else if (v.sceneId === sceneId) {
-            patchPane(paneId, {
-              content,
-              saveState: "saved",
-              loadCounter: pane.loadCounter + 1,
-            });
+            replacePane(paneId, { content, loadCounter: pane.loadCounter + 1 });
           }
         }
         set({ historyFor: null });

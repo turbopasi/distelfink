@@ -1,10 +1,13 @@
 // Generischer TipTap-Editor für eigenständige Dokumente (Personen- und
-// Orts-Dokumente): lädt selbst, speichert debounced mit Konflikt-Erkennung und
-// flusht beim Unmount — unabhängig von der Pane-Speicherlogik der Szenen.
+// Orts-Dokumente): lädt selbst und speichert über `useAutosave` — verzögert,
+// mit Konflikt-Erkennung und beim Verlassen.
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import { extraFlushers, useStore, type PaneId } from "../store";
+import { SAVE_LABELS } from "../saving";
+import { useStore, type PaneId } from "../store";
+import { ConflictBanner } from "./ConflictBanner";
+import { useAutosave } from "./useAutosave";
 import { docExtensions, getMarkdown, Toolbar, useEditorLanguage } from "./RichEditor";
 import { imagePasteHandler } from "./DocImage";
 import { PlanTagOverlay } from "./PlanTagOverlay";
@@ -12,8 +15,6 @@ import { EditorContextMenu } from "./EditorContextMenu";
 import type { WriteResult } from "../types";
 
 const AUTOSAVE_MS = 2000;
-
-type Status = "saved" | "dirty" | "conflict";
 
 /** Zuletzt gelesener bzw. gespeicherter Text pro docKey: ein schon einmal
  *  geöffnetes Dokument steht beim Wechsel sofort da, statt erst nach dem
@@ -85,7 +86,7 @@ function DocEditorFrame() {
         <div className="ProseMirror" />
       </div>
       <footer className="statusbar">
-        <span>Gespeichert</span>
+        <span className="save-state saved">{SAVE_LABELS.saved}</span>
       </footer>
     </div>
   );
@@ -106,85 +107,29 @@ function DocEditorInstance({
   read: () => Promise<string>;
   write: (content: string, force?: boolean) => Promise<WriteResult>;
 }) {
-  const [status, setStatusState] = useState<Status>("saved");
-  // Refs, weil Timer, Unmount und `flushAll` den Stand außerhalb des Renderns
-  // brauchen. Markdown entsteht erst beim Speichern, nicht bei jedem
-  // Tastendruck: `edits` zählt die Änderungen, `savedEdits` den gesicherten Stand.
-  const statusRef = useRef<Status>("saved");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Markdown entsteht erst beim Speichern, nicht bei jedem Tastendruck.
   const editorRef = useRef<Editor | null>(null);
-  const edits = useRef(0);
-  const savedEdits = useRef(0);
-  const inFlight = useRef<Promise<void> | null>(null);
-
-  const setStatus = (next: Status) => {
-    statusRef.current = next;
-    setStatusState(next);
-  };
-
-  const flush = useCallback(async () => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
-    // Nie zwei Schreibvorgänge gleichzeitig: ein laufender könnte sonst nach
-    // dem neueren fertig werden und dessen Stand als „gespeichert“ melden.
-    while (inFlight.current) await inFlight.current;
-    const editor = editorRef.current;
-    if (!editor || statusRef.current === "conflict" || edits.current === savedEdits.current) return;
-
-    const seq = edits.current;
-    const content = getMarkdown(editor);
-    const run = (async () => {
-      try {
-        const result = await write(content);
-        if (result.status === "conflict") {
-          setStatus("conflict");
-          return;
-        }
-        contentCache.set(docKey, content);
-        savedEdits.current = seq;
-        // Wurde währenddessen weitergetippt, ist der Stand noch nicht gesichert.
-        setStatus(edits.current === seq ? "saved" : "dirty");
-      } catch (e) {
-        useStore.setState({ error: String(e) });
-      }
-    })();
-    inFlight.current = run;
-    try {
-      await run;
-    } finally {
-      inFlight.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [write, docKey]);
-
-  const flushRef = useRef(flush);
-  flushRef.current = flush;
-
-  // Bei `flushAll` (Projekt schließen, Fenster schließen, Update …) mitspeichern
-  // und beim Verlassen ungespeicherte Änderungen sichern.
-  useEffect(() => {
-    const flushForStore = () => flushRef.current();
-    extraFlushers.add(flushForStore);
-    return () => {
-      extraFlushers.delete(flushForStore);
-      void flushRef.current();
-    };
-  }, []);
+  const edited = useRef(false);
+  const { status, saver } = useAutosave({
+    what: "Dieses Dokument",
+    delayMs: AUTOSAVE_MS,
+    snapshot: () => getMarkdown(editorRef.current!),
+    write: async (content: string, force) => {
+      const result = await write(content, force);
+      if (result.status === "ok") contentCache.set(docKey, content);
+      return result.status;
+    },
+  });
 
   const editor = useEditor({
     extensions: docExtensions(),
     editorProps: { handlePaste: imagePasteHandler },
     content: initialContent,
     onUpdate: () => {
-      edits.current++;
-      // Ein offener Konflikt bleibt sichtbar, bis er entschieden ist.
-      if (statusRef.current === "saved") setStatus("dirty");
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => void flushRef.current(), AUTOSAVE_MS);
+      edited.current = true;
+      saver.markDirty();
     },
-    onBlur: () => void flushRef.current(),
+    onBlur: () => void saver.flush(),
   });
 
   editorRef.current = editor;
@@ -196,8 +141,8 @@ function DocEditorInstance({
   useEffect(() => {
     reconcileRef.current = (disk) => {
       if (!editor) return;
-      if (edits.current > 0) {
-        setStatus("conflict");
+      if (edited.current) {
+        saver.raiseConflict();
         return;
       }
       editor.chain().setMeta("addToHistory", false).setContent(disk, { emitUpdate: false }).run();
@@ -205,61 +150,36 @@ function DocEditorInstance({
     return () => {
       reconcileRef.current = null;
     };
-  }, [editor, reconcileRef]);
+  }, [editor, reconcileRef, saver]);
 
   if (!editor) return <DocEditorFrame />;
+
+  const loadExternal = async () => {
+    try {
+      const c = await read();
+      contentCache.set(docKey, c);
+      editor.commands.setContent(c, { emitUpdate: false });
+      saver.reset();
+    } catch (e) {
+      useStore.setState({ error: String(e) });
+    }
+  };
 
   return (
     <div className="doc-editor">
       {status === "conflict" && (
-        <div className="banner warning">
-          <span>Dieses Dokument wurde außerhalb der App verändert.</span>
-          <button
-            onClick={async () => {
-              try {
-                const c = await read();
-                contentCache.set(docKey, c);
-                if (timer.current) clearTimeout(timer.current);
-                editor.commands.setContent(c, { emitUpdate: false });
-                savedEdits.current = edits.current;
-                setStatus("saved");
-              } catch (e) {
-                useStore.setState({ error: String(e) });
-              }
-            }}
-          >
-            Externe Version laden (eigene Änderungen verwerfen)
-          </button>
-          <button
-            onClick={async () => {
-              const seq = edits.current;
-              const content = getMarkdown(editor);
-              const result = await write(content, true).catch((e) => {
-                useStore.setState({ error: String(e) });
-                return null;
-              });
-              if (!result) return;
-              contentCache.set(docKey, content);
-              savedEdits.current = seq;
-              setStatus(edits.current === seq ? "saved" : "dirty");
-            }}
-          >
-            Eigene Version behalten (extern überschreiben)
-          </button>
-        </div>
+        <ConflictBanner
+          what="Dieses Dokument"
+          onReload={() => void loadExternal()}
+          onOverwrite={() => void saver.overwrite()}
+        />
       )}
       <Toolbar editor={editor} />
       <EditorContent editor={editor} className="editor-content doc-editor-content" />
       <PlanTagOverlay editor={editor} paneId={paneId} />
       <EditorContextMenu editor={editor} paneId={paneId} />
       <footer className="statusbar">
-        <span>
-          {status === "saved"
-            ? "Gespeichert"
-            : status === "dirty"
-              ? "Ungespeichert …"
-              : "⚠ Konflikt"}
-        </span>
+        <span className={`save-state ${status}`}>{SAVE_LABELS[status]}</span>
       </footer>
     </div>
   );

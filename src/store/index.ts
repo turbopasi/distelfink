@@ -32,7 +32,7 @@ export function registerContentSource(paneId: PaneId, source: () => string): () 
 }
 
 export {
-  extraFlushers,
+  hasOpenConflict,
   LAYOUT_MODES,
   PANE_IDS,
   PANES_FOR_MODE,

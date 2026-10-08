@@ -1,7 +1,7 @@
 import { useEffect, type MouseEvent as ReactMouseEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { PANE_IDS, PANES_FOR_MODE, useStore, type PaneId } from "./store";
+import { hasOpenConflict, PANE_IDS, PANES_FOR_MODE, useStore, type PaneId } from "./store";
 import { eventToCombo, SHORTCUT_ACTIONS } from "./settings";
 import { StartScreen } from "./components/StartScreen";
 import { Binder } from "./components/Binder";
@@ -22,6 +22,7 @@ import { SettingsOverlay } from "./components/SettingsDialog";
 import { AboutOverlay } from "./components/AboutDialog";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ConflictBanner } from "./components/ConflictBanner";
 import "./App.css";
 
 /** Wie lange das Schließen höchstens aufs Speichern wartet. */
@@ -51,9 +52,8 @@ function App() {
   useEffect(() => {
     const unlisten = getCurrentWindow().onCloseRequested(async (event) => {
       const s = useStore.getState();
-      const conflict = PANE_IDS.some((id) => s.panes[id].saveState === "conflict");
       if (
-        conflict &&
+        hasOpenConflict(s) &&
         !(await ask(
           "In einem Bereich ist ein Schreibkonflikt noch offen. Beim Schließen gehen " +
             "die eigenen Änderungen dieses Dokuments verloren.",
@@ -160,7 +160,7 @@ function App() {
         </div>
       )}
       {PANE_IDS.map((id) => (
-        <ConflictBanner key={id} paneId={id} />
+        <SceneConflictBanner key={id} paneId={id} />
       ))}
       <ExternalChangesBanner />
       {project && <UpdateBanner />}
@@ -447,7 +447,7 @@ function PaneView({ paneId }: { paneId: PaneId }) {
 }
 
 /** Szene in diesem Pane wurde extern verändert, während lokal ungespeicherte Änderungen bestehen. */
-function ConflictBanner({ paneId }: { paneId: PaneId }) {
+function SceneConflictBanner({ paneId }: { paneId: PaneId }) {
   const saveState = useStore((s) => s.panes[paneId].saveState);
   const layoutMode = useStore((s) => s.layoutMode);
   const resolveConflict = useStore((s) => s.resolveConflict);
@@ -467,18 +467,11 @@ function ConflictBanner({ paneId }: { paneId: PaneId }) {
         ? ` (Editor ${simpleLabels[paneId] ?? labels[paneId]})`
         : ` (Editor ${labels[paneId]})`;
   return (
-    <div className="banner warning">
-      <span>
-        Dieses Dokument{where} wurde außerhalb der App verändert (z. B. durch Sync). Wie möchtest
-        du fortfahren?
-      </span>
-      <button onClick={() => void resolveConflict(paneId, "reload")}>
-        Externe Version laden (eigene Änderungen verwerfen)
-      </button>
-      <button onClick={() => void resolveConflict(paneId, "overwrite")}>
-        Eigene Version behalten (extern überschreiben)
-      </button>
-    </div>
+    <ConflictBanner
+      what={`Dieses Dokument${where}`}
+      onReload={() => void resolveConflict(paneId, "reload")}
+      onOverwrite={() => void resolveConflict(paneId, "overwrite")}
+    />
   );
 }
 

@@ -3,10 +3,17 @@
 import { api } from "../api";
 import { joinFlow, normalizeScene, splitFlow } from "../flow";
 import { findNode, flowSceneIds } from "../tree";
-import type { GetState, SetState } from ".";
+import {
+  flushRegistered,
+  registeredConflict,
+  SaveController,
+  type SaveStatus,
+  type WriteOutcome,
+} from "../saving";
+import type { GetState, SetState, Store } from ".";
 import { cacheSceneStats } from "./project";
 
-export type SaveState = "saved" | "dirty" | "saving" | "conflict";
+export type SaveState = SaveStatus;
 export type PaneId = "leftTop" | "leftBottom" | "rightTop" | "rightBottom";
 /** Recherche-Inhalte, die in einem Pane angezeigt werden können. */
 export type PaneResearchKind = "characters" | "locations";
@@ -93,11 +100,6 @@ function sameOverlay(a: PaneOverlay, b: PaneOverlay): boolean {
   return a.kind === b.kind;
 }
 
-/** Ansichten mit eigenem, verzögertem Speichern (Mindboards) melden sich
- *  hier an, damit `flushAll` vor Schließen und Sicherungspunkten auch ihre
- *  offenen Änderungen schreibt. */
-export const extraFlushers = new Set<() => Promise<void>>();
-
 const AUTOSAVE_MS = 2000;
 const TYPEWRITER_KEY = "distelfink.typewriter";
 const FLOW_KEY = "distelfink.flowMode";
@@ -114,13 +116,6 @@ export const emptyPane = (): Pane => ({
 export const emptyPanes = (): Record<PaneId, Pane> =>
   Object.fromEntries(PANE_IDS.map((id) => [id, emptyPane()])) as Record<PaneId, Pane>;
 
-const autosaveTimers: Record<PaneId, ReturnType<typeof setTimeout> | null> = {
-  leftTop: null,
-  leftBottom: null,
-  rightTop: null,
-  rightBottom: null,
-};
-
 /** Liefert den aktuellen Editorinhalt eines Bereichs als Markdown. Der Editor
  *  meldet sich hier an; `pane.content` wird erst beim Speichern nachgezogen —
  *  das ganze Dokument bei jedem Tastendruck zu serialisieren, bremst lange
@@ -132,21 +127,25 @@ const contentSources: Record<PaneId, (() => string) | null> = {
   rightBottom: null,
 };
 
-/** Änderungen je Bereich — zeigt, ob während des Speicherns weitergetippt wurde. */
-const editCounts: Record<PaneId, number> = {
-  leftTop: 0,
-  leftBottom: 0,
-  rightTop: 0,
-  rightBottom: 0,
-};
+/** Was beim Speichern einer Szene bzw. eines Flusses geschrieben wird. */
+interface SceneSnapshot {
+  view: SceneView;
+  content: string;
+}
 
-/** Laufender Schreibvorgang je Bereich — `flushPane` wartet ihn ab. */
-const savesInFlight: Record<PaneId, Promise<void> | null> = {
-  leftTop: null,
-  leftBottom: null,
-  rightTop: null,
-  rightBottom: null,
-};
+/** Speichern je Bereich (siehe saving.ts). Angelegt mit dem Store. */
+const savers = {} as Record<PaneId, SaveController<SceneSnapshot | null>>;
+
+/** Alle Bereiche werden geleert (Projekt geöffnet/geschlossen). */
+export function resetPaneSavers() {
+  for (const id of PANE_IDS) savers[id]?.reset();
+}
+
+/** Steht irgendwo ein Schreibkonflikt offen — in einem Bereich oder in einem
+ *  Dokument, das eine Ansicht selbst speichert (Person/Ort, Mindboard)? */
+export function hasOpenConflict(s: Store): boolean {
+  return PANE_IDS.some((id) => s.panes[id].saveState === "conflict") || registeredConflict();
+}
 
 export interface PaneSlice {
   panes: Record<PaneId, Pane>;
@@ -196,9 +195,16 @@ export function paneOps(set: SetState, get: GetState) {
 
   const fail = (e: unknown) => set({ error: String(e) });
 
+  /** Der Bereich zeigt ein anderes Dokument bzw. einen frisch geladenen Stand:
+   *  nichts mehr offen, und Antworten älterer Schreibvorgänge zählen nicht. */
+  const replacePane = (paneId: PaneId, patch: Partial<Pane>) => {
+    savers[paneId].reset();
+    patchPane(paneId, patch);
+  };
+
   /** Wechselt die Ansicht eines Bereichs auf etwas anderes als eine Szene. */
   const showView = (paneId: PaneId, view: Exclude<PaneView, SceneView>) =>
-    patchPane(paneId, { view, overlay: null, content: "", saveState: "saved" });
+    replacePane(paneId, { view, overlay: null, content: "" });
 
   /** Öffnet eine Szene in einem Bereich — je nach Modus allein oder als Fluss
    *  aller Szenen ihres Kapitels. */
@@ -208,7 +214,6 @@ export function paneOps(set: SetState, get: GetState) {
     const pane = get().panes[paneId];
     const common = {
       overlay: null,
-      saveState: "saved" as SaveState,
       loadCounter: pane.loadCounter + 1,
       focusCounter: pane.focusCounter + 1,
     };
@@ -221,7 +226,7 @@ export function paneOps(set: SetState, get: GetState) {
           })),
         );
         for (const part of parts) cacheSceneStats(set, part.id, part.content);
-        patchPane(paneId, {
+        replacePane(paneId, {
           ...common,
           content: joinFlow(parts),
           view: {
@@ -234,7 +239,7 @@ export function paneOps(set: SetState, get: GetState) {
       } else {
         const content = await api.readScene(id);
         cacheSceneStats(set, id, content);
-        patchPane(paneId, {
+        replacePane(paneId, {
           ...common,
           content,
           view: { kind: "scene", sceneId: id, flowIds: [], flowSaved: {} },
@@ -256,7 +261,7 @@ export function paneOps(set: SetState, get: GetState) {
         ? v.sceneId
         : (v.flowIds.find((id) => findNode(binder, id)) ?? null);
       if (!anchor) {
-        patchPane(paneId, emptyPane());
+        replacePane(paneId, emptyPane());
         continue;
       }
       const ids = flowSceneIds(binder, anchor);
@@ -270,17 +275,11 @@ export function paneOps(set: SetState, get: GetState) {
     }
   };
 
-  return { patchPane, fail, showView, openScene, resyncFlows };
+  return { patchPane, replacePane, fail, showView, openScene, resyncFlows };
 }
 
 export function createPaneSlice(set: SetState, get: GetState): PaneSlice {
-  const { patchPane, fail, showView, openScene } = paneOps(set, get);
-
-  const scheduleAutosave = (paneId: PaneId) => {
-    const t = autosaveTimers[paneId];
-    if (t) clearTimeout(t);
-    autosaveTimers[paneId] = setTimeout(() => void get().flushPane(paneId), AUTOSAVE_MS);
-  };
+  const { patchPane, replacePane, fail, showView, openScene } = paneOps(set, get);
 
   /** Zieht `pane.content` auf den Stand des Editors nach. */
   const syncContent = (paneId: PaneId) => {
@@ -290,53 +289,23 @@ export function createPaneSlice(set: SetState, get: GetState): PaneSlice {
     if (content !== get().panes[paneId].content) patchPane(paneId, { content });
   };
 
-  /** Speichert die einzelne Szene eines Bereichs. */
-  const flushSingle = async (paneId: PaneId, sceneId: string) => {
-    syncContent(paneId);
-    const written = get().panes[paneId].content;
-    const edits = editCounts[paneId];
-    patchPane(paneId, { saveState: "saving" });
-    try {
-      const result = await api.writeScene(sceneId, written);
-      if (result.status === "conflict") {
-        patchPane(paneId, { saveState: "conflict" });
-      } else {
-        cacheSceneStats(set, sceneId, written);
-        // Nur "saved", wenn währenddessen nicht weitergetippt wurde.
-        patchPane(paneId, { saveState: editCounts[paneId] === edits ? "saved" : "dirty" });
-      }
-    } catch (e) {
-      patchPane(paneId, { saveState: "dirty" });
-      fail(e);
-    }
-  };
-
   /** Übernimmt den gespeicherten Stand eines Flusses — nur, wenn der Bereich
    *  noch denselben Fluss zeigt (`flowIds` wird beim Laden neu angelegt). */
-  const patchFlowSaved = (
-    paneId: PaneId,
-    flowIds: string[],
-    flowSaved: Record<string, string>,
-    saveState: SaveState,
-  ) => {
+  const patchFlowSaved = (paneId: PaneId, flowIds: string[], flowSaved: Record<string, string>) => {
     const v = sceneView(get().panes[paneId]);
     if (v?.flowIds !== flowIds) return;
-    patchPane(paneId, { view: { ...v, flowSaved }, saveState });
+    patchPane(paneId, { view: { ...v, flowSaved } });
   };
 
   /** Speichert einen Fluss: jede geänderte Szene wandert in ihre eigene Datei. */
-  const flushFlow = async (paneId: PaneId, view: SceneView) => {
-    syncContent(paneId);
-    const written = get().panes[paneId].content;
-    const edits = editCounts[paneId];
-    const parts = splitFlow(written, view.flowIds);
-    if (!parts.length) {
-      // Ohne Trenner ist nicht mehr zuzuordnen, wohin der Text gehört.
-      patchPane(paneId, { saveState: "dirty" });
-      set({ error: "Die Szenentrenner fehlen — bitte den Bereich neu laden." });
-      return;
-    }
-    patchPane(paneId, { saveState: "saving" });
+  const writeFlow = async (
+    paneId: PaneId,
+    { view, content }: SceneSnapshot,
+    force: boolean,
+  ): Promise<WriteOutcome> => {
+    const parts = splitFlow(content, view.flowIds);
+    // Ohne Trenner ist nicht mehr zuzuordnen, wohin der Text gehört.
+    if (!parts.length) throw new Error("Die Szenentrenner fehlen — bitte den Bereich neu laden.");
     const binder = get().project?.meta.binder ?? [];
     const saved = { ...view.flowSaved };
     let conflict = false;
@@ -344,7 +313,7 @@ export function createPaneSlice(set: SetState, get: GetState): PaneSlice {
       for (const part of parts) {
         // Inzwischen gelöschte Szenen nicht wieder anlegen.
         if (part.content === saved[part.id] || !findNode(binder, part.id)) continue;
-        const result = await api.writeScene(part.id, part.content);
+        const result = await api.writeScene(part.id, part.content, force);
         if (result.status === "conflict") {
           conflict = true;
           continue;
@@ -352,18 +321,35 @@ export function createPaneSlice(set: SetState, get: GetState): PaneSlice {
         saved[part.id] = part.content;
         cacheSceneStats(set, part.id, part.content);
       }
-    } catch (e) {
-      patchFlowSaved(paneId, view.flowIds, saved, "dirty");
-      fail(e);
-      return;
+    } finally {
+      // Auch nach einem Fehler: was geschrieben ist, gilt als gespeichert.
+      patchFlowSaved(paneId, view.flowIds, saved);
     }
-    patchFlowSaved(
-      paneId,
-      view.flowIds,
-      saved,
-      conflict ? "conflict" : editCounts[paneId] === edits ? "saved" : "dirty",
-    );
+    return conflict ? "conflict" : "ok";
   };
+
+  for (const paneId of PANE_IDS) {
+    savers[paneId] = new SaveController<SceneSnapshot | null>(
+      {
+        snapshot: () => {
+          syncContent(paneId);
+          const pane = get().panes[paneId];
+          const view = sceneView(pane);
+          return view ? { view, content: pane.content } : null;
+        },
+        write: async (snap, force) => {
+          if (!snap) return "ok";
+          if (snap.view.flowIds.length) return writeFlow(paneId, snap, force);
+          const result = await api.writeScene(snap.view.sceneId, snap.content, force);
+          if (result.status === "ok") cacheSceneStats(set, snap.view.sceneId, snap.content);
+          return result.status;
+        },
+        onStatus: (saveState) => patchPane(paneId, { saveState }),
+        onError: fail,
+      },
+      AUTOSAVE_MS,
+    );
+  }
 
   /** Bereich für einen Sprung aus `paneId` heraus — bevorzugt einer, in dem
    *  gerade kein Text bearbeitet wird; im Einzel-Layout wird aufgeteilt. */
@@ -436,80 +422,37 @@ export function createPaneSlice(set: SetState, get: GetState): PaneSlice {
       set({ activePane: paneId });
     },
 
-    markDirty: (paneId) => {
-      editCounts[paneId]++;
-      // Nur beim Wechsel ins Store schreiben — jeder Tastendruck ein Update
-      // hieße jedes Mal ein neues Rendern aller Abonnenten. Ein offener
-      // Konflikt bleibt stehen, bis er entschieden ist.
-      const state = get().panes[paneId].saveState;
-      if (state === "saved" || state === "saving") patchPane(paneId, { saveState: "dirty" });
-      scheduleAutosave(paneId);
-    },
+    // Der Status landet nur beim Wechsel im Store (siehe SaveController) —
+    // jeder Tastendruck ein Update hieße jedes Mal ein neues Rendern.
+    markDirty: (paneId) => savers[paneId].markDirty(),
 
-    flushPane: async (paneId) => {
-      // Läuft schon ein Speichern, erst dessen Ende abwarten: wer sonst hier
-      // abbräche (Schließen, Projektwechsel, Update), ginge davon aus, dass
-      // alles auf Platte ist, obwohl noch geschrieben wird oder inzwischen
-      // weitergetippt wurde.
-      while (savesInFlight[paneId]) await savesInFlight[paneId];
-      const pane = get().panes[paneId];
-      if (pane.saveState !== "dirty") return;
-      const t = autosaveTimers[paneId];
-      if (t) clearTimeout(t);
-      const v = sceneView(pane);
-      if (!v) return;
-      const run = v.flowIds.length ? flushFlow(paneId, v) : flushSingle(paneId, v.sceneId);
-      savesInFlight[paneId] = run;
-      try {
-        await run;
-      } finally {
-        savesInFlight[paneId] = null;
-      }
-    },
+    // Wartet einen laufenden Schreibvorgang ab: wer danach weitermacht
+    // (Schließen, Projektwechsel, Update), verlässt sich darauf, dass alles
+    // auf Platte ist.
+    flushPane: (paneId) => savers[paneId].flush(),
 
     flushAll: async () => {
       for (const paneId of PANE_IDS) await get().flushPane(paneId);
-      for (const flush of [...extraFlushers]) await flush();
+      await flushRegistered();
     },
 
     resolveConflict: async (paneId, action) => {
-      syncContent(paneId);
+      if (action === "overwrite") {
+        await savers[paneId].overwrite();
+        return;
+      }
       const pane = get().panes[paneId];
       const v = sceneView(pane);
       if (!v) return;
+      // Auch der Fluss wird über openScene neu aufgebaut.
       if (v.flowIds.length) {
-        try {
-          if (action === "overwrite") {
-            const saved = { ...v.flowSaved };
-            for (const part of splitFlow(pane.content, v.flowIds)) {
-              if (part.content === saved[part.id]) continue;
-              await api.writeScene(part.id, part.content, true);
-              saved[part.id] = part.content;
-              cacheSceneStats(set, part.id, part.content);
-            }
-            patchFlowSaved(paneId, v.flowIds, saved, "saved");
-          } else {
-            await openScene(paneId, v.sceneId);
-          }
-        } catch (e) {
-          fail(e);
-        }
+        await openScene(paneId, v.sceneId);
         return;
       }
       try {
-        if (action === "overwrite") {
-          await api.writeScene(v.sceneId, pane.content, true);
-          cacheSceneStats(set, v.sceneId, pane.content);
-          patchPane(paneId, { saveState: "saved" });
-        } else {
-          const content = await api.readScene(v.sceneId);
-          cacheSceneStats(set, v.sceneId, content);
-          patchPane(paneId, {
-            content,
-            saveState: "saved",
-            loadCounter: pane.loadCounter + 1,
-          });
-        }
+        const content = await api.readScene(v.sceneId);
+        cacheSceneStats(set, v.sceneId, content);
+        replacePane(paneId, { content, loadCounter: pane.loadCounter + 1 });
       } catch (e) {
         fail(e);
       }
@@ -528,7 +471,10 @@ export function createPaneSlice(set: SetState, get: GetState): PaneSlice {
         set({ error: "Bitte zuerst den Schreibkonflikt im betroffenen Bereich lösen." });
         return;
       }
-      for (const id of closing) await get().flushPane(id);
+      for (const id of closing) {
+        await get().flushPane(id);
+        savers[id].reset();
+      }
       set((s) => ({
         layoutMode: mode,
         activePane: visible.includes(s.activePane) ? s.activePane : "leftTop",

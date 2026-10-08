@@ -1,16 +1,15 @@
 import { useEffect, useState } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { PANE_IDS, useStore } from "../store";
+import { hasOpenConflict, useStore } from "../store";
 
 type Phase = "available" | "downloading" | "ready" | "failed";
 
 /** true (und Hinweis), wenn ein Bereich einen ungelösten Schreibkonflikt hat. */
 function blockedByConflict(): boolean {
-  const s = useStore.getState();
-  if (!PANE_IDS.some((id) => s.panes[id].saveState === "conflict")) return false;
+  if (!hasOpenConflict(useStore.getState())) return false;
   useStore.setState({
-    error: "Bitte vor dem Update zuerst den Schreibkonflikt im betroffenen Bereich lösen.",
+    error: "Bitte vor dem Update zuerst den offenen Schreibkonflikt lösen.",
   });
   return true;
 }

@@ -11,6 +11,7 @@ import type { Node as PMNode } from "@tiptap/pm/model";
 import { Selection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
+import { SAVE_LABELS } from "../saving";
 import { registerContentSource, sceneView, useStore, type PaneId } from "../store";
 import {
   addStats,
@@ -520,16 +521,9 @@ function StatusBar({ editor, paneId }: { editor: Editor; paneId: PaneId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stats, norm, total, normVariant]);
 
-  const saveLabel: Record<string, string> = {
-    saved: "Gespeichert",
-    dirty: "Ungespeichert …",
-    saving: "Speichert …",
-    conflict: "Konflikt",
-  };
-
   return (
     <footer className="statusbar">
-      <span className={`save-state ${saveState}`}>{saveLabel[saveState]}</span>
+      <span className={`save-state ${saveState}`}>{SAVE_LABELS[saveState]}</span>
       <span className="spacer" />
       <div className="sb-stats" title={statsTitle}>
         {flowIds.length > 0 && <span className="stats-scope">{chapterTitle}</span>}
