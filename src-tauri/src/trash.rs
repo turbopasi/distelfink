@@ -17,7 +17,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-pub const TRASH_DIR: &str = ".trash";
+use crate::layout::TRASH_DIR;
+
 const TRASH_INDEX: &str = ".trash/_index.json";
 
 /// Eine Datei im Papierkorb und der Pfad, an den sie zurückgehört.
@@ -30,14 +31,29 @@ pub struct TrashFile {
     pub target: String,
 }
 
+/// Was ein Eintrag im Papierkorb war.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum TrashKind {
+    Chapter,
+    Scene,
+    Characters,
+    Locations,
+    /// Notizen kennt Distelfink nicht mehr; alte Einträge gibt es noch.
+    Note,
+    /// Von einer neueren App-Version (zweiter Rechner per Sync): bleibt beim
+    /// Zurückschreiben des Index erhalten, statt verloren zu gehen.
+    #[serde(untagged)]
+    Other(String),
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TrashItem {
     /// Schlüssel im Papierkorb (IDs allein reichen nicht: dieselbe ID kann
     /// gelöscht, neu angelegt und wieder gelöscht worden sein).
     pub key: String,
-    /// "chapter" | "scene" | "characters" | "locations"
-    pub kind: String,
+    pub kind: TrashKind,
     /// ID des Eintrags — bei Binder-Knoten die des Wurzelknotens.
     pub id: String,
     pub title: String,
@@ -197,23 +213,25 @@ pub fn restore_trash(key: String, state: tauri::State<AppState>) -> Result<Proje
             p.note_mtime(&f.target);
         }
 
-        match item.kind.as_str() {
-            "chapter" | "scene" => {
+        match &item.kind {
+            TrashKind::Chapter | TrashKind::Scene => {
                 let node = item
                     .node
                     .clone()
                     .ok_or("Eintrag ohne Knotendaten — kann nicht zurück".to_string())?;
                 restore_binder_node(p, node, item.parent_id.as_deref(), item.index)?;
             }
-            "characters" | "locations" => {
+            TrashKind::Characters | TrashKind::Locations => {
                 // Die JSON-Datei ist der Eintrag; sie liegt wieder an Ort und Stelle.
             }
             // Notizen kennt Distelfink nicht mehr. Alte Papierkorb-Einträge
             // gibt es in Projekten von früher aber noch: die Markdown-Datei
             // wandert zurück nach notes/, wo sie lesbar liegen bleibt — nur
             // öffnen kann die App sie nicht mehr.
-            "note" => {}
-            other => return Err(format!("Unbekannte Art im Papierkorb: {other}")),
+            TrashKind::Note => {}
+            TrashKind::Other(other) => {
+                return Err(format!("Unbekannte Art im Papierkorb: {other}"))
+            }
         }
 
         let mut rest = items;
@@ -284,5 +302,17 @@ mod tests {
         assert!(is_plain_name("20261008-120000-szene.md"));
         assert!(!is_plain_name("../szene.md"));
         assert!(!is_plain_name(".."));
+    }
+
+    #[test]
+    fn unbekannte_arten_bleiben_erhalten() {
+        let raw = r#"[{"key":"a","kind":"scene","id":"s-1","title":"S","deletedAt":1,"files":[]},
+                      {"key":"b","kind":"zukunft","id":"z-1","title":"Z","deletedAt":2,"files":[]}]"#;
+        let items: Vec<TrashItem> = serde_json::from_str(raw).unwrap();
+        assert_eq!(items[0].kind, TrashKind::Scene);
+        assert_eq!(items[1].kind, TrashKind::Other("zukunft".into()));
+        let back = serde_json::to_string(&items).unwrap();
+        assert!(back.contains(r#""kind":"zukunft""#), "{back}");
+        assert!(back.contains(r#""kind":"scene""#), "{back}");
     }
 }

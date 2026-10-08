@@ -6,7 +6,11 @@
 //! ihrer stabilen Node-ID. Dateien werden beim Umsortieren im Binder NICHT
 //! umbenannt oder verschoben — das vermeidet Sync-Konflikte.
 
+use crate::entities::EntityKind;
 use crate::fsutil::write_atomic;
+use crate::layout::{
+    CACHE_DIR, IMAGES_DIR, MANUSCRIPT_DIR, MINDBOARD_DIR, PROJECT_FILE, TIMELINE_FILE, TRASH_DIR,
+};
 use crate::trash;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -16,7 +20,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::UNIX_EPOCH;
 
 pub const FORMAT_VERSION: u32 = 1;
-pub const PROJECT_FILE: &str = "project.json";
+pub(crate) use crate::layout::scene_rel_path;
 
 // ---------------------------------------------------------------------------
 // Datenmodell
@@ -198,10 +202,6 @@ pub(crate) fn make_id(title: &str) -> String {
     }
 }
 
-pub(crate) fn scene_rel_path(id: &str) -> String {
-    format!("manuscript/{id}.md")
-}
-
 fn find_node<'a>(nodes: &'a [BinderNode], id: &str) -> Option<&'a BinderNode> {
     for n in nodes {
         if n.id == id {
@@ -380,9 +380,9 @@ impl OpenProject {
             self.note_mtime(&scene_rel_path(&id));
         }
         self.note_mtime(PROJECT_FILE);
-        self.note_mtime("timeline.json");
+        self.note_mtime(TIMELINE_FILE);
         for id in crate::mindboard::board_ids(&self.root) {
-            self.note_mtime(&format!("{}/{id}.json", crate::mindboard::DIR));
+            self.note_mtime(&format!("{MINDBOARD_DIR}/{id}.json"));
         }
     }
 
@@ -481,14 +481,11 @@ pub(crate) fn validate_binder_ids(nodes: &[BinderNode]) -> Result<(), String> {
 
 /// Entfernt Zwischendateien, die ein Absturz beim Speichern hinterlassen hat.
 fn remove_stale_tmp_files(root: &Path) {
-    for dir in [
-        "",
-        "manuscript",
-        "characters",
-        "locations",
-        crate::mindboard::DIR,
-        trash::TRASH_DIR,
-    ] {
+    let entity_dirs = EntityKind::ALL.map(EntityKind::dir);
+    for dir in ["", MANUSCRIPT_DIR, MINDBOARD_DIR, TRASH_DIR]
+        .iter()
+        .chain(&entity_dirs)
+    {
         crate::fsutil::remove_stale_tmp_files(&root.join(dir));
     }
 }
@@ -511,12 +508,13 @@ pub fn create_project(
         return Err(format!("Ordner existiert bereits: {}", root.display()));
     }
 
-    for dir in ["manuscript", "characters", "locations", ".cache"] {
+    let entity_dirs = EntityKind::ALL.map(EntityKind::dir);
+    for dir in [MANUSCRIPT_DIR, CACHE_DIR].iter().chain(&entity_dirs) {
         fs::create_dir_all(root.join(dir)).map_err(|e| format!("Ordner anlegen ({dir}): {e}"))?;
     }
     // Die .gitignore legt `versioning::ensure_repo` unten an.
-    fs::write(root.join("timeline.json"), "{\n  \"events\": []\n}\n")
-        .map_err(|e| format!("timeline.json schreiben: {e}"))?;
+    fs::write(root.join(TIMELINE_FILE), "{\n  \"events\": []\n}\n")
+        .map_err(|e| format!("{TIMELINE_FILE} schreiben: {e}"))?;
 
     let scene_id = make_id("Szene 1");
     fs::write(root.join(scene_rel_path(&scene_id)), "")
@@ -593,7 +591,7 @@ fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
     for entry in fs::read_dir(from).map_err(|e| format!("Lesen ({}): {e}", from.display()))? {
         let entry = entry.map_err(|e| format!("Eintrag lesen: {e}"))?;
         let name = entry.file_name();
-        if name == ".cache" {
+        if name == CACHE_DIR {
             continue;
         }
         let src = entry.path();
@@ -788,7 +786,9 @@ pub fn update_node_meta(
             node.synopsis = s;
         }
         if let Some(img) = image {
-            if !img.is_empty() && (!img.starts_with("images/") || img.contains("..")) {
+            if !img.is_empty()
+                && (!img.starts_with(&format!("{IMAGES_DIR}/")) || img.contains(".."))
+            {
                 return Err(format!("Ungültiger Bildpfad: {img}"));
             }
             node.image = if img.is_empty() { None } else { Some(img) };
@@ -872,8 +872,8 @@ pub fn delete_node(id: String, state: tauri::State<AppState>) -> Result<ProjectI
             trash::TrashItem {
                 key: trash::new_key(),
                 kind: match node.kind {
-                    NodeKind::Chapter => "chapter".into(),
-                    NodeKind::Scene => "scene".into(),
+                    NodeKind::Chapter => trash::TrashKind::Chapter,
+                    NodeKind::Scene => trash::TrashKind::Scene,
                 },
                 id: node.id.clone(),
                 title: node.title.clone(),
@@ -952,7 +952,7 @@ mod tests {
     fn open_test_project(binder: Vec<BinderNode>) -> OpenProject {
         let root =
             std::env::temp_dir().join(format!("distelfink-project-{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(root.join("manuscript")).unwrap();
+        fs::create_dir_all(root.join(MANUSCRIPT_DIR)).unwrap();
         let mut p = OpenProject {
             root,
             meta: ProjectMeta {

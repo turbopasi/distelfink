@@ -1,7 +1,8 @@
 //! Planungs-Tags: Rückverlinkung ("wo kommt Jonas vor?").
 
-use crate::entities::{entity_doc_rel, Entity};
-use crate::project::{detached_project, validate_id, AppState};
+use crate::entities::{self, entity_doc_rel, EntityKind};
+use crate::project::{detached_project, scene_rel_path, scene_titles, validate_id, AppState};
+use crate::search::ItemKind;
 use serde::Serialize;
 use std::fs;
 
@@ -17,8 +18,7 @@ use std::fs;
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Mention {
-    /// "scene" | "character" | "location"
-    pub source: String,
+    pub source: ItemKind,
     pub source_id: String,
     pub source_title: String,
     /// Das getaggte Wort im Fließtext ("Er", "Seine", "Jonas", …).
@@ -29,14 +29,10 @@ pub struct Mention {
 
 struct FoundTag<'a> {
     label: &'a str,
-    kind: &'a str,
+    kind: EntityKind,
     id: &'a str,
     /// Byte-Index hinter der schließenden Klammer.
     end: usize,
-}
-
-fn is_tag_kind(kind: &str) -> bool {
-    matches!(kind, "person" | "location")
 }
 
 /// Liest einen Planungs-Tag, der an `start` mit '[' beginnt.
@@ -50,8 +46,9 @@ fn plan_tag_at(s: &str, start: usize) -> Option<FoundTag<'_>> {
     let target_start = start + 1 + close + 2;
     let paren = s[target_start..].find(')')?;
     let target = &s[target_start..target_start + paren];
-    let (kind, id) = target.split_once(':')?;
-    if !is_tag_kind(kind) || id.is_empty() {
+    let (tag, id) = target.split_once(':')?;
+    let kind = EntityKind::from_tag(tag)?;
+    if id.is_empty() {
         return None;
     }
     if !id
@@ -98,9 +95,9 @@ fn shorten(s: &str, max: usize) -> String {
 
 fn collect_mentions(
     text: &str,
-    kind: &str,
+    kind: EntityKind,
     id: &str,
-    source: &str,
+    source: ItemKind,
     source_id: &str,
     source_title: &str,
     out: &mut Vec<Mention>,
@@ -126,7 +123,7 @@ fn collect_mentions(
         let context = shorten(&strip_plan_tags(line), 180);
         for label in hits {
             out.push(Mention {
-                source: source.to_string(),
+                source,
                 source_id: source_id.to_string(),
                 source_title: source_title.to_string(),
                 label: label.to_string(),
@@ -144,44 +141,37 @@ pub fn list_mentions(
     id: String,
     state: tauri::State<AppState>,
 ) -> Result<Vec<Mention>, String> {
-    if !is_tag_kind(&tag_kind) {
-        return Err(format!("Unbekannte Tag-Art: {tag_kind}"));
-    }
+    let kind = EntityKind::from_tag(&tag_kind).ok_or(format!("Unbekannte Tag-Art: {tag_kind}"))?;
     validate_id(&id)?;
     // Liest alle Texte des Projekts — ohne den Lock zu halten.
     let p = &detached_project(&state)?;
     let mut out = Vec::new();
 
-    for (scene_id, title) in crate::project::scene_titles(&p.meta.binder) {
-        let Ok(text) = fs::read_to_string(p.abs(&crate::project::scene_rel_path(&scene_id))) else {
+    for (scene_id, title) in scene_titles(&p.meta.binder) {
+        let Ok(text) = fs::read_to_string(p.abs(&scene_rel_path(&scene_id))) else {
             continue;
         };
-        collect_mentions(&text, &tag_kind, &id, "scene", &scene_id, &title, &mut out);
+        collect_mentions(
+            &text,
+            kind,
+            &id,
+            ItemKind::Scene,
+            &scene_id,
+            &title,
+            &mut out,
+        );
     }
 
-    for (source, dir) in [("character", "characters"), ("location", "locations")] {
-        let Ok(entries) = fs::read_dir(p.abs(dir)) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            let Ok(raw) = fs::read_to_string(&path) else {
-                continue;
-            };
-            let Ok(entity) = serde_json::from_str::<Entity>(&raw) else {
-                continue;
-            };
-            let Ok(text) = fs::read_to_string(p.abs(&entity_doc_rel(dir, &entity.id))) else {
+    for source in EntityKind::ALL {
+        for entity in entities::read_all(&p.root, source).entities {
+            let Ok(text) = fs::read_to_string(p.abs(&entity_doc_rel(source, &entity.id))) else {
                 continue;
             };
             collect_mentions(
                 &text,
-                &tag_kind,
+                kind,
                 &id,
-                source,
+                source.item_kind(),
                 &entity.id,
                 &entity.name,
                 &mut out,
@@ -201,15 +191,26 @@ mod tests {
 Später sah [ihn](person:jonas-3f2a1b) niemand mehr.\n\
 Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa22).";
 
-    fn mentions(kind: &str, id: &str) -> Vec<Mention> {
+    const PERSON: EntityKind = EntityKind::Characters;
+    const LOCATION: EntityKind = EntityKind::Locations;
+
+    fn mentions(kind: EntityKind, id: &str) -> Vec<Mention> {
         let mut out = Vec::new();
-        collect_mentions(TEXT, kind, id, "scene", "szene-aaa111", "Anfang", &mut out);
+        collect_mentions(
+            TEXT,
+            kind,
+            id,
+            ItemKind::Scene,
+            "szene-aaa111",
+            "Anfang",
+            &mut out,
+        );
         out
     }
 
     #[test]
     fn findet_alle_fundstellen_einer_person() {
-        let found = mentions("person", "jonas-3f2a1b");
+        let found = mentions(PERSON, "jonas-3f2a1b");
         assert_eq!(found.len(), 2);
         assert_eq!(found[0].label, "Er");
         assert_eq!(found[0].source_title, "Anfang");
@@ -220,11 +221,11 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
 
     #[test]
     fn trennt_arten_und_ids() {
-        assert_eq!(mentions("location", "wald-9c11ab").len(), 1);
-        assert_eq!(mentions("person", "mara-11aa22").len(), 1);
+        assert_eq!(mentions(LOCATION, "wald-9c11ab").len(), 1);
+        assert_eq!(mentions(PERSON, "mara-11aa22").len(), 1);
         // Gleiche ID, andere Art → keine Fundstelle.
-        assert!(mentions("location", "jonas-3f2a1b").is_empty());
-        assert!(mentions("person", "gibt-es-nicht").is_empty());
+        assert!(mentions(LOCATION, "jonas-3f2a1b").is_empty());
+        assert!(mentions(PERSON, "gibt-es-nicht").is_empty());
     }
 
     #[test]
@@ -241,7 +242,15 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
     fn kuerzt_lange_kontexte() {
         let long = format!("{} [Er](person:jonas-3f2a1b)", "wort ".repeat(80));
         let mut out = Vec::new();
-        collect_mentions(&long, "person", "jonas-3f2a1b", "scene", "s", "T", &mut out);
+        collect_mentions(
+            &long,
+            PERSON,
+            "jonas-3f2a1b",
+            ItemKind::Scene,
+            "s",
+            "T",
+            &mut out,
+        );
         assert_eq!(out.len(), 1);
         assert!(out[0].context.chars().count() <= 181, "{}", out[0].context);
         assert!(out[0].context.ends_with('…'));
@@ -253,9 +262,9 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
         let mut out = Vec::new();
         collect_mentions(
             text,
-            "person",
+            PERSON,
             "jonas-3f2a1b",
-            "scene",
+            ItemKind::Scene,
             "s",
             "Szene",
             &mut out,

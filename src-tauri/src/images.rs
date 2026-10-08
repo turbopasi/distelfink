@@ -2,6 +2,7 @@
 //! als data-URL (vermeidet Asset-Protocol-Scopes) und die Bilder in Dokumenten
 //! (`images/`).
 
+use crate::layout::IMAGES_DIR;
 use crate::project::{make_id, with_project, AppState};
 use base64::Engine;
 use std::fs;
@@ -109,9 +110,9 @@ pub fn save_doc_image(
         .decode(&data_base64)
         .map_err(|e| format!("Bilddaten ungültig: {e}"))?;
     with_project(&state, |p| {
-        fs::create_dir_all(p.abs("images")).map_err(|e| format!("images anlegen: {e}"))?;
+        fs::create_dir_all(p.abs(IMAGES_DIR)).map_err(|e| format!("{IMAGES_DIR} anlegen: {e}"))?;
         let id = make_id("bild");
-        let rel = format!("images/{id}.{ext}");
+        let rel = format!("{IMAGES_DIR}/{id}.{ext}");
         fs::write(p.abs(&rel), &bytes).map_err(|e| format!("{rel} schreiben: {e}"))?;
         Ok(rel)
     })
@@ -126,9 +127,9 @@ pub fn import_doc_image(
 ) -> Result<String, String> {
     let ext = image_ext_of(&source_path)?;
     with_project(&state, |p| {
-        fs::create_dir_all(p.abs("images")).map_err(|e| format!("images anlegen: {e}"))?;
+        fs::create_dir_all(p.abs(IMAGES_DIR)).map_err(|e| format!("{IMAGES_DIR} anlegen: {e}"))?;
         let id = make_id("bild");
-        let rel = format!("images/{id}.{ext}");
+        let rel = format!("{IMAGES_DIR}/{id}.{ext}");
         fs::copy(&source_path, p.abs(&rel)).map_err(|e| format!("Bild kopieren: {e}"))?;
         Ok(rel)
     })
@@ -142,7 +143,7 @@ pub fn read_doc_image(
     rel: String,
     state: tauri::State<AppState>,
 ) -> Result<Option<String>, String> {
-    if !rel.starts_with("images/") || rel.contains("..") || rel.contains('\\') {
+    if !rel.starts_with(&format!("{IMAGES_DIR}/")) || rel.contains("..") || rel.contains('\\') {
         return Err(format!("Ungültiger Bildpfad: {rel}"));
     }
     let ext = ext_lower(&rel);

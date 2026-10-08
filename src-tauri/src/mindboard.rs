@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 
-pub(crate) const DIR: &str = "mindboards";
+use crate::layout::MINDBOARD_DIR as DIR;
 
 fn rel_path(id: &str) -> String {
     format!("{DIR}/{id}.json")

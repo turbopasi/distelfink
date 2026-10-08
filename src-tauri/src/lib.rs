@@ -2,6 +2,7 @@ mod entities;
 mod export;
 mod fsutil;
 mod images;
+mod layout;
 mod mentions;
 mod mindboard;
 mod project;

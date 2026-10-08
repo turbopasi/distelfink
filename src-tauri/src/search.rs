@@ -4,6 +4,8 @@
 //! (fehlend, korrupt oder veraltet) komplett aus den Klartextdateien neu
 //! aufgebaut und gehört weder in Git noch in den Sync.
 
+use crate::entities::{self, EntityKind};
+use crate::layout::{CACHE_DIR, TIMELINE_FILE};
 use crate::project::{
     catch_panic, scene_rel_path, scene_titles, with_project, AppState, OpenProject,
 };
@@ -16,10 +18,32 @@ use std::sync::Mutex;
 /// Indexdatei — ohne diese Sperre bauten sie sie gleichzeitig neu auf.
 static SEARCH_LOCK: Mutex<()> = Mutex::new(());
 
+/// Was ein Treffer in Suche und Fundstellen ist. Im Suchindex steht die Art
+/// als Text (`as_str`), zur Oberfläche geht sie genauso.
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum ItemKind {
+    Scene,
+    Character,
+    Location,
+    Event,
+}
+
+impl ItemKind {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            ItemKind::Scene => "scene",
+            ItemKind::Character => "character",
+            ItemKind::Location => "location",
+            ItemKind::Event => "event",
+        }
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchHit {
-    /// "scene" | "character" | "location" | "event"
+    /// `ItemKind::as_str`, so wie es im Index steht.
     pub kind: String,
     pub id: String,
     pub title: String,
@@ -55,25 +79,14 @@ fn fill_index(p: &OpenProject, conn: &Connection) -> Result<(), String> {
     // Szenen: Titel aus dem Binder, Inhalt aus manuscript/<id>.md
     for (id, title) in scene_titles(&p.meta.binder) {
         let body = fs::read_to_string(p.abs(&scene_rel_path(&id))).unwrap_or_default();
-        insert.execute(("scene", &id, &title, &body)).map_err(err)?;
+        insert
+            .execute((ItemKind::Scene.as_str(), &id, &title, &body))
+            .map_err(err)?;
     }
 
     // Personen & Orte: Name + Beschreibung + freie Felder
-    for (kind, dir) in [("character", "characters"), ("location", "locations")] {
-        let Ok(entries) = fs::read_dir(p.abs(dir)) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            let Ok(raw) = fs::read_to_string(&path) else {
-                continue;
-            };
-            let Ok(entity) = serde_json::from_str::<crate::entities::Entity>(&raw) else {
-                continue;
-            };
+    for kind in EntityKind::ALL {
+        for entity in entities::read_all(&p.root, kind).entities {
             let mut body = entity.description.clone();
             for f in &entity.fields {
                 body.push('\n');
@@ -83,18 +96,19 @@ fn fill_index(p: &OpenProject, conn: &Connection) -> Result<(), String> {
             }
             // Freitext-Dokument (neben dem JSON) — bei migrierten Einträgen
             // die eigentliche Quelle.
-            if let Ok(doc) = fs::read_to_string(path.with_extension("md")) {
+            if let Ok(doc) = fs::read_to_string(p.abs(&entities::entity_doc_rel(kind, &entity.id)))
+            {
                 body.push('\n');
                 body.push_str(&doc);
             }
             insert
-                .execute((kind, &entity.id, &entity.name, &body))
+                .execute((kind.item_kind().as_str(), &entity.id, &entity.name, &body))
                 .map_err(err)?;
         }
     }
 
     // Zeitstrahl-Ereignisse
-    if let Ok(raw) = fs::read_to_string(p.abs("timeline.json")) {
+    if let Ok(raw) = fs::read_to_string(p.abs(TIMELINE_FILE)) {
         if let Ok(file) = serde_json::from_str::<serde_json::Value>(&raw) {
             for ev in file["events"].as_array().unwrap_or(&Vec::new()) {
                 let id = ev["id"].as_str().unwrap_or_default();
@@ -105,7 +119,9 @@ fn fill_index(p: &OpenProject, conn: &Connection) -> Result<(), String> {
                     ev["description"].as_str().unwrap_or_default()
                 );
                 if !id.is_empty() {
-                    insert.execute(("event", id, title, &body)).map_err(err)?;
+                    insert
+                        .execute((ItemKind::Event.as_str(), id, title, &body))
+                        .map_err(err)?;
                 }
             }
         }
@@ -150,8 +166,8 @@ pub fn search_project(
     })?;
 
     let result = catch_panic("Die Suche", || {
-        let cache_dir = p.abs(".cache");
-        fs::create_dir_all(&cache_dir).map_err(|e| format!(".cache anlegen: {e}"))?;
+        let cache_dir = p.abs(CACHE_DIR);
+        fs::create_dir_all(&cache_dir).map_err(|e| format!("{CACHE_DIR} anlegen: {e}"))?;
         let db_path = cache_dir.join("index.sqlite");
 
         let mut conn = Connection::open(&db_path).map_err(|e| format!("Suchindex öffnen: {e}"))?;
