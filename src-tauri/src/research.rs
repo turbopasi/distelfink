@@ -3,12 +3,12 @@
 //! Personen/Orte: eine JSON-Datei pro Eintrag in `characters/` bzw. `locations/`.
 //! Zeitstrahl: `timeline.json` (Reihenfolge = Array-Reihenfolge).
 
+use crate::fsutil::write_atomic;
+use crate::images;
 use crate::project::{
     detached_project, make_id, validate_id, with_project, AppState, OpenProject, Saved, WriteResult,
 };
-use crate::fsutil::write_atomic;
 use crate::trash;
-use crate::images;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -77,7 +77,10 @@ pub fn list_entities(kind: String, state: tauri::State<AppState>) -> Result<Enti
 }
 
 fn read_entity_dir(abs_dir: &std::path::Path, dir: &str) -> EntityList {
-    let mut list = EntityList { entities: Vec::new(), broken: Vec::new() };
+    let mut list = EntityList {
+        entities: Vec::new(),
+        broken: Vec::new(),
+    };
     let entries = match fs::read_dir(abs_dir) {
         Ok(e) => e,
         Err(_) => return list, // Ordner fehlt (altes Projekt) → leer
@@ -120,8 +123,8 @@ pub fn save_entity(
         }
         fs::create_dir_all(p.abs(dir)).map_err(|e| format!("{dir} anlegen: {e}"))?;
         let rel = entity_rel_path(dir, &entity.id);
-        let json = serde_json::to_string_pretty(&entity)
-            .map_err(|e| format!("Serialisierung: {e}"))?;
+        let json =
+            serde_json::to_string_pretty(&entity).map_err(|e| format!("Serialisierung: {e}"))?;
         write_atomic(&p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
         p.note_mtime(&rel);
         p.search_dirty = true;
@@ -164,8 +167,7 @@ pub fn duplicate_entity(
         let doc_src = p.abs(&entity_doc_rel(dir, &id));
         if doc_src.exists() {
             let doc_rel = entity_doc_rel(dir, &entity.id);
-            fs::copy(&doc_src, p.abs(&doc_rel))
-                .map_err(|e| format!("{doc_rel} schreiben: {e}"))?;
+            fs::copy(&doc_src, p.abs(&doc_rel)).map_err(|e| format!("{doc_rel} schreiben: {e}"))?;
             p.note_mtime(&doc_rel);
         }
         p.search_dirty = true;
@@ -188,7 +190,10 @@ pub fn delete_entity(
         let entity = fs::read_to_string(p.abs(&rel))
             .ok()
             .and_then(|raw| serde_json::from_str::<Entity>(&raw).ok());
-        let title = entity.as_ref().map(|e| e.name.clone()).unwrap_or_else(|| id.clone());
+        let title = entity
+            .as_ref()
+            .map(|e| e.name.clone())
+            .unwrap_or_else(|| id.clone());
         // Das Bild gehört zum Eintrag: mit in den Papierkorb, sonst bliebe es
         // nach dem Leeren verwaist liegen und fehlte beim Wiederherstellen.
         let image = entity
@@ -249,8 +254,8 @@ pub fn update_entity_meta(
         if let Some(scene_ids) = scene_ids {
             entity.scene_ids = scene_ids;
         }
-        let json = serde_json::to_string_pretty(&entity)
-            .map_err(|e| format!("Serialisierung: {e}"))?;
+        let json =
+            serde_json::to_string_pretty(&entity).map_err(|e| format!("Serialisierung: {e}"))?;
         write_atomic(&p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
         p.note_mtime(&rel);
         p.search_dirty = true;
@@ -295,7 +300,8 @@ pub fn read_entity_doc(
             entity.fields = Vec::new();
             let json = serde_json::to_string_pretty(&entity)
                 .map_err(|e| format!("Serialisierung: {e}"))?;
-            write_atomic(&p.abs(&json_rel), json).map_err(|e| format!("{json_rel} schreiben: {e}"))?;
+            write_atomic(&p.abs(&json_rel), json)
+                .map_err(|e| format!("{json_rel} schreiben: {e}"))?;
 
             p.note_mtime(&json_rel);
             p.note_mtime(&rel);
@@ -349,8 +355,7 @@ fn store_entity_image(
         }
     }
     let rel = entity_rel_path(dir, &entity.id);
-    let json =
-        serde_json::to_string_pretty(entity).map_err(|e| format!("Serialisierung: {e}"))?;
+    let json = serde_json::to_string_pretty(entity).map_err(|e| format!("Serialisierung: {e}"))?;
     write_atomic(&p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
     p.note_mtime(&rel);
     Ok(())
@@ -559,10 +564,18 @@ fn plan_tag_at(s: &str, start: usize) -> Option<FoundTag<'_>> {
     if !is_tag_kind(kind) || id.is_empty() {
         return None;
     }
-    if !id.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-') {
+    if !id
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    {
         return None;
     }
-    Some(FoundTag { label, kind, id, end: target_start + paren + 1 })
+    Some(FoundTag {
+        label,
+        kind,
+        id,
+        end: target_start + paren + 1,
+    })
 }
 
 /// Entfernt die Tag-Syntax aus einer Zeile, damit die Vorschau lesbar ist.
@@ -650,8 +663,7 @@ pub fn list_mentions(
     let mut out = Vec::new();
 
     for (scene_id, title) in crate::project::scene_titles(&p.meta.binder) {
-        let Ok(text) = fs::read_to_string(p.abs(&crate::project::scene_rel_path(&scene_id)))
-        else {
+        let Ok(text) = fs::read_to_string(p.abs(&crate::project::scene_rel_path(&scene_id))) else {
             continue;
         };
         collect_mentions(&text, &tag_kind, &id, "scene", &scene_id, &title, &mut out);
@@ -694,7 +706,8 @@ pub fn list_mentions(
 mod tests {
     use super::*;
 
-    const TEXT: &str = "Am Abend kam [Er](person:jonas-3f2a1b) durch [den Wald](location:wald-9c11ab).\n\
+    const TEXT: &str =
+        "Am Abend kam [Er](person:jonas-3f2a1b) durch [den Wald](location:wald-9c11ab).\n\
 Später sah [ihn](person:jonas-3f2a1b) niemand mehr.\n\
 Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa22).";
 
@@ -717,9 +730,14 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
 
     #[test]
     fn kaputte_datei_reisst_die_liste_nicht_mit() {
-        let dir = std::env::temp_dir().join(format!("distelfink-entities-{}", uuid::Uuid::new_v4()));
+        let dir =
+            std::env::temp_dir().join(format!("distelfink-entities-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("anna-aaa111.json"), r#"{"id":"anna-aaa111","name":"Anna"}"#).unwrap();
+        fs::write(
+            dir.join("anna-aaa111.json"),
+            r#"{"id":"anna-aaa111","name":"Anna"}"#,
+        )
+        .unwrap();
         fs::write(dir.join("bert-bbb222.json"), "{ halb geschr").unwrap();
         fs::write(dir.join("anna-aaa111.md"), "Text").unwrap();
 
@@ -787,8 +805,16 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
     fn ereignis_im_geloeschten_strang_faellt_auf_den_ersten_zurueck() {
         let mut tl = Timeline {
             tracks: vec![
-                TimelineTrack { id: "a".into(), name: "A".into(), color: String::new() },
-                TimelineTrack { id: "b".into(), name: "B".into(), color: String::new() },
+                TimelineTrack {
+                    id: "a".into(),
+                    name: "A".into(),
+                    color: String::new(),
+                },
+                TimelineTrack {
+                    id: "b".into(),
+                    name: "B".into(),
+                    color: String::new(),
+                },
             ],
             events: vec![TimelineEvent {
                 id: "e-1".into(),
@@ -826,8 +852,16 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
     fn vergibt_slots_fuer_alte_dateien() {
         let mut tl = Timeline {
             tracks: vec![
-                TimelineTrack { id: "a".into(), name: "A".into(), color: String::new() },
-                TimelineTrack { id: "b".into(), name: "B".into(), color: String::new() },
+                TimelineTrack {
+                    id: "a".into(),
+                    name: "A".into(),
+                    color: String::new(),
+                },
+                TimelineTrack {
+                    id: "b".into(),
+                    name: "B".into(),
+                    color: String::new(),
+                },
             ],
             events: vec![
                 ev("a1", "a", None),
@@ -869,7 +903,15 @@ Hier steht [ein Link](https://example.org) und [jemand anders](person:mara-11aa2
     fn kommt_mit_umlauten_klar() {
         let text = "Draußen stand [er](person:jonas-3f2a1b) – müde.";
         let mut out = Vec::new();
-        collect_mentions(text, "person", "jonas-3f2a1b", "scene", "s", "Szene", &mut out);
+        collect_mentions(
+            text,
+            "person",
+            "jonas-3f2a1b",
+            "scene",
+            "s",
+            "Szene",
+            &mut out,
+        );
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].context, "Draußen stand er – müde.");
     }
@@ -967,8 +1009,8 @@ pub fn save_timeline(
             return Ok(Saved::Conflict);
         }
         normalize(&mut timeline);
-        let json = serde_json::to_string_pretty(&timeline)
-            .map_err(|e| format!("Serialisierung: {e}"))?;
+        let json =
+            serde_json::to_string_pretty(&timeline).map_err(|e| format!("Serialisierung: {e}"))?;
         write_atomic(&p.abs(TIMELINE_FILE), json)
             .map_err(|e| format!("{TIMELINE_FILE} schreiben: {e}"))?;
         p.note_mtime(TIMELINE_FILE);

@@ -62,7 +62,11 @@ fn shrink(bytes: &[u8]) -> Option<(Vec<u8>, &'static str)> {
         return None;
     }
     let img = image::load_from_memory(bytes).ok()?;
-    let small = img.resize(PREVIEW_MAX, PREVIEW_MAX, image::imageops::FilterType::Lanczos3);
+    let small = img.resize(
+        PREVIEW_MAX,
+        PREVIEW_MAX,
+        image::imageops::FilterType::Lanczos3,
+    );
     let mut out = std::io::Cursor::new(Vec::new());
     if small.color().has_alpha() {
         small.write_to(&mut out, image::ImageFormat::Png).ok()?;
@@ -94,13 +98,19 @@ mod tests {
 
     #[test]
     fn kleine_bilder_bleiben_unveraendert() {
-        let png = encode(image::DynamicImage::new_rgb8(300, 200), image::ImageFormat::Png);
+        let png = encode(
+            image::DynamicImage::new_rgb8(300, 200),
+            image::ImageFormat::Png,
+        );
         assert!(shrink_to_preview(&png).is_none());
     }
 
     #[test]
     fn grosse_bilder_werden_verkleinert() {
-        let png = encode(image::DynamicImage::new_rgb8(2000, 1000), image::ImageFormat::Png);
+        let png = encode(
+            image::DynamicImage::new_rgb8(2000, 1000),
+            image::ImageFormat::Png,
+        );
         let (small, ext) = shrink_to_preview(&png).unwrap();
         assert_eq!(ext, "jpg");
         let img = image::load_from_memory(&small).unwrap();
@@ -109,7 +119,10 @@ mod tests {
 
     #[test]
     fn transparenz_bleibt_png() {
-        let png = encode(image::DynamicImage::new_rgba8(1000, 1500), image::ImageFormat::Png);
+        let png = encode(
+            image::DynamicImage::new_rgba8(1000, 1500),
+            image::ImageFormat::Png,
+        );
         let (small, ext) = shrink_to_preview(&png).unwrap();
         assert_eq!(ext, "png");
         let img = image::load_from_memory(&small).unwrap();

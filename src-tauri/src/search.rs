@@ -154,8 +154,7 @@ pub fn search_project(
         fs::create_dir_all(&cache_dir).map_err(|e| format!(".cache anlegen: {e}"))?;
         let db_path = cache_dir.join("index.sqlite");
 
-        let mut conn =
-            Connection::open(&db_path).map_err(|e| format!("Suchindex öffnen: {e}"))?;
+        let mut conn = Connection::open(&db_path).map_err(|e| format!("Suchindex öffnen: {e}"))?;
 
         let table_exists: bool = conn
             .query_row(

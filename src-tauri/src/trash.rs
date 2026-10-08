@@ -8,11 +8,11 @@
 //!
 //! `.trash/` ist in `.gitignore` — der Papierkorb gehört nicht in den Verlauf.
 
+use crate::fsutil::write_atomic;
 use crate::project::{
     restore_binder_node, validate_binder_ids, with_project, AppState, BinderNode, OpenProject,
     ProjectInfo,
 };
-use crate::fsutil::write_atomic;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -118,7 +118,9 @@ fn is_plain_name(name: &str) -> bool {
 /// Ein projektrelativer Pfad, der im Projekt bleibt.
 fn is_project_rel(rel: &str) -> bool {
     !rel.contains(['\\', ':'])
-        && rel.split('/').all(|part| !part.is_empty() && part != "." && part != "..")
+        && rel
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 /// Der Index ist eine Datei im Projekt und kann von Hand oder durch ein
@@ -127,7 +129,10 @@ fn is_project_rel(rel: &str) -> bool {
 fn check_item(item: &TrashItem) -> Result<(), String> {
     for f in &item.files {
         if !is_plain_name(&f.name) || !is_project_rel(&f.target) {
-            return Err(format!("Ungültiger Papierkorb-Eintrag: {} → {}", f.name, f.target));
+            return Err(format!(
+                "Ungültiger Papierkorb-Eintrag: {} → {}",
+                f.name, f.target
+            ));
         }
     }
     if let Some(node) = &item.node {

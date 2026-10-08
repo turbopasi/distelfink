@@ -131,7 +131,9 @@ const MAX_ZOOM: f64 = 4.0;
 /// und unbrauchbare Zoomwerte.
 fn normalize(board: &mut Mindboard) {
     let mut seen = HashSet::new();
-    board.nodes.retain(|n| !n.id.is_empty() && seen.insert(n.id.clone()));
+    board
+        .nodes
+        .retain(|n| !n.id.is_empty() && seen.insert(n.id.clone()));
     let ids: HashSet<&str> = board.nodes.iter().map(|n| n.id.as_str()).collect();
 
     // Ein Knotenpaar trägt höchstens eine Verbindung, egal in welche Richtung.
@@ -174,8 +176,8 @@ fn normalize(board: &mut Mindboard) {
 
 fn read_board(p: &crate::project::OpenProject, id: &str) -> Result<Mindboard, String> {
     validate_id(id)?;
-    let raw = fs::read_to_string(p.abs(&rel_path(id)))
-        .map_err(|e| format!("Mindboard lesen: {e}"))?;
+    let raw =
+        fs::read_to_string(p.abs(&rel_path(id))).map_err(|e| format!("Mindboard lesen: {e}"))?;
     let mut board: Mindboard =
         serde_json::from_str(&raw).map_err(|e| format!("Mindboard ungültig: {e}"))?;
     board.id = id.to_string();
@@ -186,8 +188,7 @@ fn read_board(p: &crate::project::OpenProject, id: &str) -> Result<Mindboard, St
 fn write_board(p: &mut crate::project::OpenProject, board: &Mindboard) -> Result<(), String> {
     validate_id(&board.id)?;
     fs::create_dir_all(p.abs(DIR)).map_err(|e| format!("{DIR}/ anlegen: {e}"))?;
-    let json =
-        serde_json::to_string_pretty(board).map_err(|e| format!("Serialisierung: {e}"))?;
+    let json = serde_json::to_string_pretty(board).map_err(|e| format!("Serialisierung: {e}"))?;
     let rel = rel_path(&board.id);
     write_atomic(&p.abs(&rel), json).map_err(|e| format!("{rel} schreiben: {e}"))?;
     p.note_mtime(&rel);
@@ -217,7 +218,10 @@ pub fn list_mindboards(state: tauri::State<AppState>) -> Result<Vec<MindboardInf
     with_project(&state, |p| {
         let mut list: Vec<MindboardInfo> = read_all(p)
             .into_iter()
-            .map(|b| MindboardInfo { id: b.id, name: b.name })
+            .map(|b| MindboardInfo {
+                id: b.id,
+                name: b.name,
+            })
             .collect();
         list.sort_by_key(|b| b.name.to_lowercase());
         Ok(list)
@@ -230,14 +234,21 @@ pub fn create_mindboard(
     state: tauri::State<AppState>,
 ) -> Result<MindboardInfo, String> {
     with_project(&state, |p| {
-        let name = if name.trim().is_empty() { "Mindboard".to_string() } else { name };
+        let name = if name.trim().is_empty() {
+            "Mindboard".to_string()
+        } else {
+            name
+        };
         let board = Mindboard {
             id: make_id(&name),
             name,
             ..Default::default()
         };
         write_board(p, &board)?;
-        Ok(MindboardInfo { id: board.id, name: board.name })
+        Ok(MindboardInfo {
+            id: board.id,
+            name: board.name,
+        })
     })
 }
 
@@ -327,7 +338,9 @@ pub fn export_mindboard_png(
     else {
         return Ok(false);
     };
-    let path = chosen.into_path().map_err(|e| format!("Speicherort: {e}"))?;
+    let path = chosen
+        .into_path()
+        .map_err(|e| format!("Speicherort: {e}"))?;
     fs::write(&path, bytes).map_err(|e| format!("Datei schreiben: {e}"))?;
     Ok(true)
 }
@@ -411,7 +424,11 @@ mod tests {
     #[test]
     fn begrenzt_den_zoom() {
         let mut b = Mindboard {
-            view: Some(MindView { x: f64::NAN, y: 3.0, zoom: 99.0 }),
+            view: Some(MindView {
+                x: f64::NAN,
+                y: 3.0,
+                zoom: 99.0,
+            }),
             ..Default::default()
         };
         normalize(&mut b);

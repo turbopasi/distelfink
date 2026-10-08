@@ -48,8 +48,9 @@ pub struct VersionInfo {
 fn open_or_init(root: &Path) -> Result<Repository, String> {
     match Repository::open(root) {
         Ok(repo) => Ok(repo),
-        Err(_) => Repository::init(root)
-            .map_err(|e| format!("Git-Repo initialisieren: {}", e.message())),
+        Err(_) => {
+            Repository::init(root).map_err(|e| format!("Git-Repo initialisieren: {}", e.message()))
+        }
     }
 }
 
@@ -139,9 +140,7 @@ fn validate_rel(rel: &str) -> Result<(), String> {
     let ok = !rel.is_empty()
         && rel.len() <= 256
         && !rel.contains('\\')
-        && rel
-            .split('/')
-            .all(|c| !c.is_empty() && !c.starts_with('.'));
+        && rel.split('/').all(|c| !c.is_empty() && !c.starts_with('.'));
     if ok {
         Ok(())
     } else {
@@ -160,7 +159,8 @@ fn blob_id_at(commit: &git2::Commit, rel: &str) -> Option<Oid> {
 }
 
 fn version_content(repo: &Repository, commit_id: &str, rel: &str) -> Result<String, String> {
-    let oid = Oid::from_str(commit_id).map_err(|_| format!("Ungültige Versions-ID: {commit_id:?}"))?;
+    let oid =
+        Oid::from_str(commit_id).map_err(|_| format!("Ungültige Versions-ID: {commit_id:?}"))?;
     let commit = repo
         .find_commit(oid)
         .map_err(|e| format!("Version nicht gefunden: {}", e.message()))?;
@@ -195,7 +195,10 @@ pub fn snapshot(message: Option<String>, state: tauri::State<AppState>) -> Resul
 /// Alle Versionen einer Datei (neueste zuerst): nur Commits, in denen sich
 /// ihr Inhalt gegenüber dem Vorgänger geändert hat.
 #[tauri::command(async)]
-pub fn list_history(rel: String, state: tauri::State<AppState>) -> Result<Vec<VersionInfo>, String> {
+pub fn list_history(
+    rel: String,
+    state: tauri::State<AppState>,
+) -> Result<Vec<VersionInfo>, String> {
     validate_rel(&rel)?;
     let p = detached_project(&state)?;
     let repo = open_or_init(&p.root)?;
@@ -211,7 +214,9 @@ pub fn list_history(rel: String, state: tauri::State<AppState>) -> Result<Vec<Ve
     let mut versions = Vec::new();
     for oid in walk {
         let Ok(oid) = oid else { continue };
-        let Ok(commit) = repo.find_commit(oid) else { continue };
+        let Ok(commit) = repo.find_commit(oid) else {
+            continue;
+        };
         let id = blob_id_at(&commit, &rel);
         let parent_id = commit.parent(0).ok().and_then(|par| blob_id_at(&par, &rel));
         if id.is_some() && id != parent_id {
@@ -272,8 +277,16 @@ pub fn restore_version(
         .find_commit(oid)
         .ok()
         .and_then(|c| chrono::DateTime::from_timestamp(c.time().seconds(), 0))
-        .map(|d| d.with_timezone(&chrono::Local).format("%d.%m.%Y %H:%M").to_string())
+        .map(|d| {
+            d.with_timezone(&chrono::Local)
+                .format("%d.%m.%Y %H:%M")
+                .to_string()
+        })
         .unwrap_or_else(|| commit_id.chars().take(7).collect());
-    commit_all(&repo, author, &format!("Wiederhergestellt: {rel} (Stand vom {stamp})"))?;
+    commit_all(
+        &repo,
+        author,
+        &format!("Wiederhergestellt: {rel} (Stand vom {stamp})"),
+    )?;
     Ok(content)
 }

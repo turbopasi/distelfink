@@ -52,7 +52,9 @@ fn replace(tmp: &Path, path: &Path) -> io::Result<()> {
 
 /// Räumt Zwischendateien weg, die ein Absturz in `dir` hinterlassen hat.
 pub(crate) fn remove_stale_tmp_files(dir: &Path) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         if entry.file_name().to_string_lossy().ends_with(TMP_SUFFIX) {
             let _ = fs::remove_file(entry.path());
@@ -74,7 +76,11 @@ mod tests {
         write_atomic(&path, "neu").unwrap();
 
         assert_eq!(fs::read_to_string(&path).unwrap(), "neu");
-        let names: Vec<_> = fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name()).collect();
+        let names: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name())
+            .collect();
         assert_eq!(names.len(), 1, "{names:?}");
         let _ = fs::remove_dir_all(&dir);
     }
@@ -88,7 +94,11 @@ mod tests {
 
         remove_stale_tmp_files(&dir);
 
-        let names: Vec<_> = fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name()).collect();
+        let names: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name())
+            .collect();
         assert_eq!(names, vec![std::ffi::OsString::from("szene.md")]);
         let _ = fs::remove_dir_all(&dir);
     }

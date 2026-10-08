@@ -78,7 +78,10 @@ fn background_file(app: &tauri::AppHandle, name: &str) -> Result<PathBuf, String
 /// ihren Dateinamen. Ältere Hintergrundbilder werden dabei entfernt — es gibt
 /// immer nur eines.
 #[tauri::command]
-pub fn import_background_image(app: tauri::AppHandle, source_path: String) -> Result<String, String> {
+pub fn import_background_image(
+    app: tauri::AppHandle,
+    source_path: String,
+) -> Result<String, String> {
     let ext = images::image_ext_of(&source_path)?;
     let dir = background_dir(&app)?;
     // Zeitstempel im Namen: so lädt die Anzeige nach einem Wechsel garantiert
@@ -95,7 +98,10 @@ pub fn import_background_image(app: tauri::AppHandle, source_path: String) -> Re
 
 /// Liefert das Hintergrundbild als data-URL (None, wenn die Datei fehlt).
 #[tauri::command(async)]
-pub fn read_background_image(app: tauri::AppHandle, name: String) -> Result<Option<String>, String> {
+pub fn read_background_image(
+    app: tauri::AppHandle,
+    name: String,
+) -> Result<Option<String>, String> {
     let path = background_file(&app, &name)?;
     let bytes = match fs::read(&path) {
         Ok(b) => b,
@@ -114,7 +120,9 @@ pub fn clear_background_image(app: tauri::AppHandle) -> Result<(), String> {
 
 /// Löscht alle Hintergrundbilder außer `keep`.
 fn remove_other_backgrounds(dir: &std::path::Path, keep: &str) {
-    let Ok(entries) = fs::read_dir(dir) else { return };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         if name != keep && name.starts_with("hintergrund-") {

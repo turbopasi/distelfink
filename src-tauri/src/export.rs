@@ -75,7 +75,11 @@ impl ExportTemplate {
     }
 
     fn lang(&self) -> &str {
-        if self.language.trim().is_empty() { "de" } else { self.language.trim() }
+        if self.language.trim().is_empty() {
+            "de"
+        } else {
+            self.language.trim()
+        }
     }
 }
 
@@ -88,7 +92,12 @@ fn builtin_templates() -> Vec<ExportTemplate> {
             font: "georgia".into(),
             font_size_pt: 11.0,
             line_spacing: 1.15,
-            margins_mm: MarginsMm { top: 20.0, bottom: 20.0, left: 25.0, right: 25.0 },
+            margins_mm: MarginsMm {
+                top: 20.0,
+                bottom: 20.0,
+                left: 25.0,
+                right: 25.0,
+            },
             header: "{titel}".into(),
             scene_separator: "* * *".into(),
             chapter_start_new_page: true,
@@ -106,7 +115,12 @@ fn builtin_templates() -> Vec<ExportTemplate> {
             font: "times".into(),
             font_size_pt: 12.0,
             line_spacing: 1.5,
-            margins_mm: MarginsMm { top: 25.0, bottom: 25.0, left: 25.0, right: 40.0 },
+            margins_mm: MarginsMm {
+                top: 25.0,
+                bottom: 25.0,
+                left: 25.0,
+                right: 40.0,
+            },
             header: "{autor} · {titel} — Seite {seite}".into(),
             scene_separator: "* * *".into(),
             chapter_start_new_page: true,
@@ -135,7 +149,8 @@ fn load_custom_templates(p: &OpenProject) -> Vec<ExportTemplate> {
 fn store_custom_templates(p: &OpenProject, templates: Vec<ExportTemplate>) -> Result<(), String> {
     let json = serde_json::to_string_pretty(&TemplatesFile { templates })
         .map_err(|e| format!("Vorlagen serialisieren: {e}"))?;
-    crate::fsutil::write_atomic(&p.abs(TEMPLATES_FILE), json).map_err(|e| format!("Vorlagen schreiben: {e}"))
+    crate::fsutil::write_atomic(&p.abs(TEMPLATES_FILE), json)
+        .map_err(|e| format!("Vorlagen schreiben: {e}"))
 }
 
 fn all_templates(p: &OpenProject) -> Vec<ExportTemplate> {
@@ -261,7 +276,10 @@ enum Block {
     Heading { level: u8, text: String },
     /// `align` ist die *explizite* Ausrichtung des Absatzes; None heißt
     /// „Grundausrichtung der Vorlage".
-    Paragraph { inlines: Vec<Inline>, align: Option<Align> },
+    Paragraph {
+        inlines: Vec<Inline>,
+        align: Option<Align>,
+    },
     /// Szenentrenner (Text kommt aus der Vorlage).
     Separator,
 }
@@ -291,7 +309,10 @@ fn parse_markdown(md: &str) -> Vec<Block> {
 
     let flush_para = |cur: &mut Vec<Inline>, blocks: &mut Vec<Block>, align: Option<Align>| {
         if !cur.is_empty() {
-            blocks.push(Block::Paragraph { inlines: std::mem::take(cur), align });
+            blocks.push(Block::Paragraph {
+                inlines: std::mem::take(cur),
+                align,
+            });
         }
     };
 
@@ -308,7 +329,10 @@ fn parse_markdown(md: &str) -> Vec<Block> {
             }
             Event::End(TagEnd::Heading(_)) => {
                 if let Some(level) = in_heading.take() {
-                    blocks.push(Block::Heading { level, text: std::mem::take(&mut heading_text) });
+                    blocks.push(Block::Heading {
+                        level,
+                        text: std::mem::take(&mut heading_text),
+                    });
                 }
             }
             Event::End(TagEnd::Paragraph) | Event::End(TagEnd::Item) => {
@@ -316,7 +340,11 @@ fn parse_markdown(md: &str) -> Vec<Block> {
             }
             Event::Start(Tag::Item) => {
                 flush_para(&mut cur, &mut blocks, align_stack.last().copied());
-                cur.push(Inline { text: "• ".into(), bold: false, italic: false });
+                cur.push(Inline {
+                    text: "• ".into(),
+                    bold: false,
+                    italic: false,
+                });
             }
             Event::Start(Tag::Strong) => bold += 1,
             Event::End(TagEnd::Strong) => bold = bold.saturating_sub(1),
@@ -326,14 +354,22 @@ fn parse_markdown(md: &str) -> Vec<Block> {
                 if in_heading.is_some() {
                     heading_text.push_str(&t);
                 } else {
-                    cur.push(Inline { text: t.to_string(), bold: bold > 0, italic: italic > 0 });
+                    cur.push(Inline {
+                        text: t.to_string(),
+                        bold: bold > 0,
+                        italic: italic > 0,
+                    });
                 }
             }
             Event::SoftBreak | Event::HardBreak => {
                 if in_heading.is_some() {
                     heading_text.push(' ');
                 } else {
-                    cur.push(Inline { text: " ".into(), bold: bold > 0, italic: italic > 0 });
+                    cur.push(Inline {
+                        text: " ".into(),
+                        bold: bold > 0,
+                        italic: italic > 0,
+                    });
                 }
             }
             Event::Rule => {
@@ -379,12 +415,18 @@ fn collect_child_blocks(
         match child.kind {
             NodeKind::Chapter => {
                 prev_was_scene = false;
-                out.push(Block::Heading { level: depth.min(3), text: child.title.clone() });
+                out.push(Block::Heading {
+                    level: depth.min(3),
+                    text: child.title.clone(),
+                });
                 collect_child_blocks(p, child, include, tpl, depth + 1, out);
             }
             NodeKind::Scene => {
                 if tpl.include_scene_titles {
-                    out.push(Block::Heading { level: depth.min(3), text: child.title.clone() });
+                    out.push(Block::Heading {
+                        level: depth.min(3),
+                        text: child.title.clone(),
+                    });
                 } else if prev_was_scene {
                     out.push(Block::Separator);
                 }
@@ -436,7 +478,11 @@ fn fill_placeholders(s: &str, title: &str, author: &str) -> String {
 }
 
 fn separator_text(tpl: &ExportTemplate) -> &str {
-    if tpl.scene_separator.trim().is_empty() { "" } else { tpl.scene_separator.trim() }
+    if tpl.scene_separator.trim().is_empty() {
+        ""
+    } else {
+        tpl.scene_separator.trim()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -491,8 +537,11 @@ fn write_markdown(chapters: &[CompChapter], tpl: &ExportTemplate, plain: bool) -
                     }
                 }
                 Block::Paragraph { inlines, .. } => {
-                    let line =
-                        if plain { inline_to_text(inlines) } else { inline_to_md(inlines) };
+                    let line = if plain {
+                        inline_to_text(inlines)
+                    } else {
+                        inline_to_md(inlines)
+                    };
                     out.push_str(line.trim_end());
                     out.push_str("\n\n");
                 }
@@ -534,13 +583,26 @@ fn write_docx(
     use docx_rs::*;
 
     let font = docx_font_name(&tpl.font);
-    let fonts = || RunFonts::new().ascii(font).hi_ansi(font).cs(font).east_asia(font);
+    let fonts = || {
+        RunFonts::new()
+            .ascii(font)
+            .hi_ansi(font)
+            .cs(font)
+            .east_asia(font)
+    };
     let half_points = (tpl.font_size_pt * 2.0).round() as usize;
     let line = (tpl.line_spacing * 240.0).round() as u32;
-    let spacing = || LineSpacing::new().line_rule(LineSpacingType::Auto).line(line as i32);
+    let spacing = || {
+        LineSpacing::new()
+            .line_rule(LineSpacingType::Auto)
+            .line(line as i32)
+    };
 
     let body_run = |i: &Inline| {
-        let mut r = Run::new().add_text(&i.text).fonts(fonts()).size(half_points);
+        let mut r = Run::new()
+            .add_text(&i.text)
+            .fonts(fonts())
+            .size(half_points);
         if i.bold {
             r = r.bold();
         }
@@ -578,17 +640,16 @@ fn write_docx(
             match rest.split_once("{seite}") {
                 Some((before, after)) => {
                     if !before.is_empty() {
-                        par = par.add_run(
-                            Run::new().add_text(before).fonts(fonts()).size(half_points),
-                        );
+                        par = par
+                            .add_run(Run::new().add_text(before).fonts(fonts()).size(half_points));
                     }
                     par = par.add_page_num(PageNum::new());
                     rest = after;
                 }
                 None => {
                     if !rest.is_empty() {
-                        par = par
-                            .add_run(Run::new().add_text(rest).fonts(fonts()).size(half_points));
+                        par =
+                            par.add_run(Run::new().add_text(rest).fonts(fonts()).size(half_points));
                     }
                     break;
                 }
@@ -635,9 +696,10 @@ fn write_docx(
         }
     }
 
-    let file =
-        fs::File::create(out_path).map_err(|e| format!("Datei anlegen: {e}"))?;
-    docx.build().pack(file).map_err(|e| format!("DOCX schreiben: {e}"))?;
+    let file = fs::File::create(out_path).map_err(|e| format!("Datei anlegen: {e}"))?;
+    docx.build()
+        .pack(file)
+        .map_err(|e| format!("DOCX schreiben: {e}"))?;
     Ok(())
 }
 
@@ -646,7 +708,10 @@ fn write_docx(
 // ---------------------------------------------------------------------------
 
 fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 fn inlines_to_xhtml(inlines: &[Inline]) -> String {
@@ -780,69 +845,104 @@ fn font_candidates(font: &str) -> Vec<[String; 4]> {
         "/usr/share/fonts/liberation",
         "/usr/share/fonts/truetype/liberation2",
     ];
-    let dejavu_dirs = ["/usr/share/fonts/truetype/dejavu", "/usr/share/fonts/dejavu"];
+    let dejavu_dirs = [
+        "/usr/share/fonts/truetype/dejavu",
+        "/usr/share/fonts/dejavu",
+    ];
 
     let mut c: Vec<[String; 4]> = Vec::new();
     match font {
         "georgia" => {
-            c.push(win(["georgia.ttf", "georgiab.ttf", "georgiai.ttf", "georgiaz.ttf"]));
+            c.push(win([
+                "georgia.ttf",
+                "georgiab.ttf",
+                "georgiai.ttf",
+                "georgiaz.ttf",
+            ]));
         }
         "arial" => {
-            c.push(win(["arial.ttf", "arialbd.ttf", "ariali.ttf", "arialbi.ttf"]));
+            c.push(win([
+                "arial.ttf",
+                "arialbd.ttf",
+                "ariali.ttf",
+                "arialbi.ttf",
+            ]));
             for d in liberation_dirs {
-                c.push(linux(d, [
-                    "LiberationSans-Regular.ttf",
-                    "LiberationSans-Bold.ttf",
-                    "LiberationSans-Italic.ttf",
-                    "LiberationSans-BoldItalic.ttf",
-                ]));
+                c.push(linux(
+                    d,
+                    [
+                        "LiberationSans-Regular.ttf",
+                        "LiberationSans-Bold.ttf",
+                        "LiberationSans-Italic.ttf",
+                        "LiberationSans-BoldItalic.ttf",
+                    ],
+                ));
             }
             for d in dejavu_dirs {
-                c.push(linux(d, [
-                    "DejaVuSans.ttf",
-                    "DejaVuSans-Bold.ttf",
-                    "DejaVuSans-Oblique.ttf",
-                    "DejaVuSans-BoldOblique.ttf",
-                ]));
+                c.push(linux(
+                    d,
+                    [
+                        "DejaVuSans.ttf",
+                        "DejaVuSans-Bold.ttf",
+                        "DejaVuSans-Oblique.ttf",
+                        "DejaVuSans-BoldOblique.ttf",
+                    ],
+                ));
             }
         }
         "courier" => {
             c.push(win(["cour.ttf", "courbd.ttf", "couri.ttf", "courbi.ttf"]));
             for d in liberation_dirs {
-                c.push(linux(d, [
-                    "LiberationMono-Regular.ttf",
-                    "LiberationMono-Bold.ttf",
-                    "LiberationMono-Italic.ttf",
-                    "LiberationMono-BoldItalic.ttf",
-                ]));
+                c.push(linux(
+                    d,
+                    [
+                        "LiberationMono-Regular.ttf",
+                        "LiberationMono-Bold.ttf",
+                        "LiberationMono-Italic.ttf",
+                        "LiberationMono-BoldItalic.ttf",
+                    ],
+                ));
             }
         }
         _ => {}
     }
     // Serifen-Fallback-Kette gilt für "times", "georgia" und Unbekanntes.
     if font != "arial" && font != "courier" {
-        c.push(win(["times.ttf", "timesbd.ttf", "timesi.ttf", "timesbi.ttf"]));
+        c.push(win([
+            "times.ttf",
+            "timesbd.ttf",
+            "timesi.ttf",
+            "timesbi.ttf",
+        ]));
         for d in liberation_dirs {
-            c.push(linux(d, [
-                "LiberationSerif-Regular.ttf",
-                "LiberationSerif-Bold.ttf",
-                "LiberationSerif-Italic.ttf",
-                "LiberationSerif-BoldItalic.ttf",
-            ]));
+            c.push(linux(
+                d,
+                [
+                    "LiberationSerif-Regular.ttf",
+                    "LiberationSerif-Bold.ttf",
+                    "LiberationSerif-Italic.ttf",
+                    "LiberationSerif-BoldItalic.ttf",
+                ],
+            ));
         }
         for d in dejavu_dirs {
-            c.push(linux(d, [
-                "DejaVuSerif.ttf",
-                "DejaVuSerif-Bold.ttf",
-                "DejaVuSerif-Italic.ttf",
-                "DejaVuSerif-BoldItalic.ttf",
-            ]));
+            c.push(linux(
+                d,
+                [
+                    "DejaVuSerif.ttf",
+                    "DejaVuSerif-Bold.ttf",
+                    "DejaVuSerif-Italic.ttf",
+                    "DejaVuSerif-BoldItalic.ttf",
+                ],
+            ));
         }
     }
     c
 }
 
-fn load_pdf_fonts(font: &str) -> Result<genpdf::fonts::FontFamily<genpdf::fonts::FontData>, String> {
+fn load_pdf_fonts(
+    font: &str,
+) -> Result<genpdf::fonts::FontFamily<genpdf::fonts::FontData>, String> {
     for set in font_candidates(font) {
         if !set.iter().all(|p| Path::new(p).is_file()) {
             continue;
@@ -859,9 +959,11 @@ fn load_pdf_fonts(font: &str) -> Result<genpdf::fonts::FontFamily<genpdf::fonts:
             bold_italic: load(&set[3])?,
         });
     }
-    Err("Keine passende Schriftart auf dem System gefunden (für PDF-Export wird \
+    Err(
+        "Keine passende Schriftart auf dem System gefunden (für PDF-Export wird \
          z. B. Times New Roman, Liberation Serif oder DejaVu Serif benötigt)"
-        .into())
+            .into(),
+    )
 }
 
 fn write_pdf(
@@ -961,7 +1063,8 @@ fn write_pdf(
         }
     }
 
-    doc.render_to_file(out_path).map_err(|e| format!("PDF schreiben: {e}"))
+    doc.render_to_file(out_path)
+        .map_err(|e| format!("PDF schreiben: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -1042,8 +1145,14 @@ mod tests {
     fn test_project(dir: &Path) -> (OpenProject, HashSet<String>) {
         fs::create_dir_all(dir.join("manuscript")).unwrap();
         let scenes = [
-            ("szene-aaa111", "Es war **dunkel** und *kalt*.\n\nEin zweiter Absatz mit Umlauten: äöüß."),
-            ("szene-bbb222", "## Zwischenüberschrift\n\nText nach der Überschrift."),
+            (
+                "szene-aaa111",
+                "Es war **dunkel** und *kalt*.\n\nEin zweiter Absatz mit Umlauten: äöüß.",
+            ),
+            (
+                "szene-bbb222",
+                "## Zwischenüberschrift\n\nText nach der Überschrift.",
+            ),
             ("szene-ccc333", "Dritte Szene, ***fett und kursiv***."),
         ];
         for (id, md) in scenes {
@@ -1094,7 +1203,11 @@ mod tests {
             ],
         };
         let include = [
-            "kap-1", "kap-2", "szene-aaa111", "szene-bbb222", "szene-ccc333",
+            "kap-1",
+            "kap-2",
+            "szene-aaa111",
+            "szene-bbb222",
+            "szene-ccc333",
         ]
         .iter()
         .map(|s| s.to_string())
@@ -1125,16 +1238,42 @@ mod tests {
         assert!(txt.contains("KAPITEL 1"));
         assert!(txt.contains("dunkel") && !txt.contains("**"));
 
-        write_docx(&chapters, tpl, "Testroman", "Test Autor", &dir.join("out.docx")).unwrap();
-        write_epub(&chapters, tpl, "Testroman", "Test Autor", &dir.join("out.epub")).unwrap();
-        write_pdf(&chapters, tpl, "Testroman", "Test Autor", &dir.join("out.pdf")).unwrap();
+        write_docx(
+            &chapters,
+            tpl,
+            "Testroman",
+            "Test Autor",
+            &dir.join("out.docx"),
+        )
+        .unwrap();
+        write_epub(
+            &chapters,
+            tpl,
+            "Testroman",
+            "Test Autor",
+            &dir.join("out.epub"),
+        )
+        .unwrap();
+        write_pdf(
+            &chapters,
+            tpl,
+            "Testroman",
+            "Test Autor",
+            &dir.join("out.pdf"),
+        )
+        .unwrap();
         for f in ["out.docx", "out.epub", "out.pdf"] {
-            assert!(fs::metadata(dir.join(f)).unwrap().len() > 500, "{f} zu klein");
+            assert!(
+                fs::metadata(dir.join(f)).unwrap().len() > 500,
+                "{f} zu klein"
+            );
         }
 
         // Auswahl wirkt: Kapitel 2 abgewählt → nur ein Export-Kapitel.
-        let partial: HashSet<String> =
-            ["kap-1", "szene-aaa111"].iter().map(|s| s.to_string()).collect();
+        let partial: HashSet<String> = ["kap-1", "szene-aaa111"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let chapters = compile_chapters(&p, &partial, tpl).unwrap();
         assert_eq!(chapters.len(), 1);
         assert!(!write_markdown(&chapters, tpl, false).contains("Dritte Szene"));

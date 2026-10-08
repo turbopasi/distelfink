@@ -106,7 +106,9 @@ impl AppState {
     /// Mutex; ohne das `into_inner` ließe sich danach bis zum Neustart nichts
     /// mehr speichern — genau dann, wenn ungesicherter Text im Editor steht.
     pub(crate) fn lock(&self) -> MutexGuard<'_, Option<OpenProject>> {
-        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -132,7 +134,9 @@ pub enum WriteResult {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase", tag = "status")]
 pub enum Saved<T> {
-    Ok { data: T },
+    Ok {
+        data: T,
+    },
     /// Datei wurde seit letztem bekannten Stand extern verändert; nicht
     /// geschrieben (außer `force`).
     Conflict,
@@ -419,14 +423,19 @@ pub(crate) fn detached_project(state: &tauri::State<AppState>) -> Result<OpenPro
 /// Führt eine längere Arbeit aus und macht aus einem Panic einen Fehler. Die
 /// schweren Commands laufen asynchron; ein Panic dort bliebe sonst ein
 /// Promise, das nie antwortet — die Oberfläche wartete ewig.
-pub(crate) fn catch_panic<T>(what: &str, f: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+pub(crate) fn catch_panic<T>(
+    what: &str,
+    f: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|panic| {
         let detail = panic
             .downcast_ref::<&str>()
             .map(|s| s.to_string())
             .or_else(|| panic.downcast_ref::<String>().cloned())
             .unwrap_or_default();
-        Err(format!("{what} ist unerwartet abgebrochen. {detail}").trim_end().to_string())
+        Err(format!("{what} ist unerwartet abgebrochen. {detail}")
+            .trim_end()
+            .to_string())
     })
 }
 
@@ -472,8 +481,14 @@ pub(crate) fn validate_binder_ids(nodes: &[BinderNode]) -> Result<(), String> {
 
 /// Entfernt Zwischendateien, die ein Absturz beim Speichern hinterlassen hat.
 fn remove_stale_tmp_files(root: &Path) {
-    for dir in ["", "manuscript", "characters", "locations", crate::mindboard::DIR, trash::TRASH_DIR]
-    {
+    for dir in [
+        "",
+        "manuscript",
+        "characters",
+        "locations",
+        crate::mindboard::DIR,
+        trash::TRASH_DIR,
+    ] {
         crate::fsutil::remove_stale_tmp_files(&root.join(dir));
     }
 }
@@ -509,7 +524,11 @@ pub fn create_project(
 
     let meta = ProjectMeta {
         format_version: FORMAT_VERSION,
-        title: if title.trim().is_empty() { safe_name.clone() } else { title },
+        title: if title.trim().is_empty() {
+            safe_name.clone()
+        } else {
+            title
+        },
         author,
         created: chrono::Local::now().to_rfc3339(),
         binder: vec![{
@@ -763,8 +782,8 @@ pub fn update_node_meta(
     state: tauri::State<AppState>,
 ) -> Result<ProjectInfo, String> {
     with_binder(&state, |p| {
-        let node = find_node_mut(&mut p.meta.binder, &id)
-            .ok_or(format!("Node nicht gefunden: {id}"))?;
+        let node =
+            find_node_mut(&mut p.meta.binder, &id).ok_or(format!("Node nicht gefunden: {id}"))?;
         if let Some(s) = synopsis {
             node.synopsis = s;
         }
@@ -819,8 +838,8 @@ pub fn duplicate_node(id: String, state: tauri::State<AppState>) -> Result<Proje
             p.note_mtime(&rel);
         }
 
-        let (parent_id, index) = parent_and_index(&p.meta.binder, &id)
-            .ok_or(format!("Node nicht gefunden: {id}"))?;
+        let (parent_id, index) =
+            parent_and_index(&p.meta.binder, &id).ok_or(format!("Node nicht gefunden: {id}"))?;
         children_of(&mut p.meta.binder, parent_id.as_deref())
             .ok_or(format!("Node nicht gefunden: {id}"))?
             .insert(index + 1, clone);
@@ -836,8 +855,8 @@ pub fn duplicate_node(id: String, state: tauri::State<AppState>) -> Result<Proje
 #[tauri::command]
 pub fn delete_node(id: String, state: tauri::State<AppState>) -> Result<ProjectInfo, String> {
     with_binder(&state, |p| {
-        let (parent_id, index) = parent_and_index(&p.meta.binder, &id)
-            .ok_or(format!("Node nicht gefunden: {id}"))?;
+        let (parent_id, index) =
+            parent_and_index(&p.meta.binder, &id).ok_or(format!("Node nicht gefunden: {id}"))?;
         let node =
             remove_node(&mut p.meta.binder, &id).ok_or(format!("Node nicht gefunden: {id}"))?;
         let mut scene_ids = Vec::new();
@@ -872,10 +891,7 @@ pub fn delete_node(id: String, state: tauri::State<AppState>) -> Result<ProjectI
 
 /// Elternordner und Platz eines Knotens — der Papierkorb merkt sich beides,
 /// damit Wiederherstellen den Eintrag dorthin zurücklegt, wo er stand.
-fn parent_and_index(
-    nodes: &[BinderNode],
-    id: &str,
-) -> Option<(Option<String>, usize)> {
+fn parent_and_index(nodes: &[BinderNode], id: &str) -> Option<(Option<String>, usize)> {
     if let Some(i) = nodes.iter().position(|n| n.id == id) {
         return Some((None, i));
     }
@@ -934,7 +950,8 @@ mod tests {
     }
 
     fn open_test_project(binder: Vec<BinderNode>) -> OpenProject {
-        let root = std::env::temp_dir().join(format!("distelfink-project-{}", uuid::Uuid::new_v4()));
+        let root =
+            std::env::temp_dir().join(format!("distelfink-project-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(root.join("manuscript")).unwrap();
         let mut p = OpenProject {
             root,
@@ -959,7 +976,12 @@ mod tests {
         let path = p.abs(PROJECT_FILE);
         fs::write(&path, serde_json::to_string(meta).unwrap()).unwrap();
         let later = SystemTime::now() + Duration::from_secs(5);
-        fs::File::options().write(true).open(&path).unwrap().set_modified(later).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
     }
 
     #[test]
@@ -998,7 +1020,12 @@ mod tests {
         let path = p.abs(PROJECT_FILE);
         fs::write(&path, "{ halb geschrieben").unwrap();
         let later = SystemTime::now() + Duration::from_secs(5);
-        fs::File::options().write(true).open(&path).unwrap().set_modified(later).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
 
         assert!(p.refresh_meta().is_err());
         // Nichts überschrieben — der Sync kann die Datei noch fertig schreiben.
