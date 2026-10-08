@@ -272,7 +272,7 @@ pub fn restore_version(
         Ok(())
     })?;
 
-    let oid = Oid::from_str(&commit_id).unwrap_or_else(|_| Oid::zero());
+    let oid = Oid::from_str(&commit_id).unwrap_or(Oid::ZERO_SHA1);
     let stamp = repo
         .find_commit(oid)
         .ok()
