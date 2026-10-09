@@ -8,7 +8,7 @@ import { SAVE_LABELS } from "../saving";
 import { useStore, type PaneId } from "../store";
 import { ConflictBanner } from "./ConflictBanner";
 import { useAutosave } from "./useAutosave";
-import { docExtensions, getMarkdown, Toolbar, useEditorLanguage } from "./RichEditor";
+import { docExtensions, getMarkdown, isRealEdit, Toolbar, useEditorLanguage } from "./RichEditor";
 import { imagePasteHandler } from "./DocImage";
 import { PlanTagOverlay } from "./PlanTagOverlay";
 import { EditorContextMenu } from "./EditorContextMenu";
@@ -140,7 +140,8 @@ function DocEditorInstance({
     extensions: docExtensions(),
     editorProps: { handlePaste: imagePasteHandler },
     content: initialContent,
-    onUpdate: () => {
+    onUpdate: ({ transaction }) => {
+      if (!isRealEdit(transaction)) return;
       edited.current = true;
       saver.markDirty();
     },

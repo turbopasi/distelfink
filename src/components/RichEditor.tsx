@@ -8,7 +8,7 @@ import {
 } from "react";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import { Selection } from "@tiptap/pm/state";
+import { Selection, type Transaction } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import { SAVE_LABELS } from "../saving";
@@ -149,7 +149,8 @@ function EditorInstance({
     // Szenen anstößt) den Fokus reißen, selbst wenn woanders gerade aktiv
     // getippt wird (z. B. Umbenennen im Binder). Stattdessen unten manuell
     // und mit Rücksicht darauf fokussieren.
-    onUpdate: ({ editor }) => {
+    onUpdate: ({ editor, transaction }) => {
+      if (!isRealEdit(transaction)) return;
       markDirty(paneId);
       if (useStore.getState().typewriter) centerCaret(editor);
     },
@@ -221,6 +222,15 @@ function EditorInstance({
       <StatusBar editor={editor} paneId={paneId} />
     </>
   );
+}
+
+/** Ob ein `update` von einer echten Änderung kommt. Endet das Dokument nicht
+ *  mit einem Absatz (Überschrift, Bild, im Fluss eine leere letzte Szene),
+ *  hängt trailingNode aus dem StarterKit bei der ersten Transaktion — schon
+ *  beim Setzen des Cursors — einen leeren an. Der ergibt kein Markdown, darf
+ *  das Dokument also nicht als ungespeichert markieren. */
+export function isRealEdit(transaction: Transaction): boolean {
+  return transaction.docChanged;
 }
 
 /** tiptap-markdown liefert keine Storage-Typen für sein Editor-Storage-Feld. */
