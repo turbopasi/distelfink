@@ -405,27 +405,52 @@ impl Layout<'_> {
         }
     }
 
-    /// Setzt einen Absatz; `align` gilt für alle Zeilen, beim Blocksatz außer
-    /// der letzten.
-    fn paragraph(&mut self, runs: &[(String, Style)], align: Align) {
+    fn lines(&self, runs: &[(String, Style)]) -> Vec<Vec<Word>> {
         let words: Vec<Word> = words_of(runs, self.fonts)
             .into_iter()
             .flat_map(|w| split_long(w, self.width, self.fonts))
             .collect();
-        let lines = break_lines(words, self.width);
+        break_lines(words, self.width)
+    }
+
+    /// Schriftgröße und Höhe einer Zeile (nach ihrem größten Stück).
+    fn line_metrics(&self, line: &[Word]) -> (f32, f32) {
+        let size = line
+            .iter()
+            .flat_map(|w| w.pieces.iter().map(|(_, s)| s.size))
+            .fold(0.0, f32::max);
+        (
+            size,
+            self.fonts.regular().line_height(size) * self.line_spacing,
+        )
+    }
+
+    /// Beginnt eine neue Seite, wenn `runs` samt `after` (Abstand und erste
+    /// Zeilen des Folgetexts) hier nicht mehr passt — sonst bliebe eine
+    /// Überschrift oder ein Szenentrenner allein am Seitenende stehen.
+    fn keep_with_next(&mut self, runs: &[(String, Style)], after: f32) {
+        let own: f32 = self
+            .lines(runs)
+            .iter()
+            .map(|l| self.line_metrics(l).1)
+            .sum();
+        if self.y + own + after > self.bottom && !self.page_is_empty() {
+            self.new_page();
+        }
+    }
+
+    /// Setzt einen Absatz; `align` gilt für alle Zeilen, beim Blocksatz außer
+    /// der letzten.
+    fn paragraph(&mut self, runs: &[(String, Style)], align: Align) {
+        let lines = self.lines(runs);
         let count = lines.len();
         for (i, line) in lines.into_iter().enumerate() {
             let last = i + 1 == count;
-            let size = line
-                .iter()
-                .flat_map(|w| w.pieces.iter().map(|(_, s)| s.size))
-                .fold(0.0, f32::max);
-            let face = self.fonts.regular();
-            let height = face.line_height(size) * self.line_spacing;
+            let (size, height) = self.line_metrics(&line);
             if self.y + height > self.bottom && !self.page_is_empty() {
                 self.new_page();
             }
-            let baseline = self.y + face.ascent * size;
+            let baseline = self.y + self.fonts.regular().ascent * size;
             self.place_line(line, align, last, baseline);
             self.y += height;
         }
@@ -507,21 +532,28 @@ pub(super) fn write_pdf(
 
     let sep = separator_text(tpl).to_string();
     let base_align = tpl.base_align();
+    // Was nach einer Überschrift bzw. einem Trenner mindestens noch auf die
+    // Seite passen muss: zwei Zeilen Text.
+    let two_lines = 2.0 * fonts.regular().line_height(base) * layout.line_spacing;
 
     for (ci, ch) in chapters.iter().enumerate() {
         if ci > 0 && tpl.chapter_start_new_page && !layout.page_is_empty() {
             layout.new_page();
         }
         if let Some(h) = &ch.heading {
-            layout.paragraph(&[(h.clone(), bold(base + 4.0))], Align::Left);
+            let runs = [(h.clone(), bold(base + 4.0))];
+            layout.keep_with_next(&runs, 6.0 * MM + two_lines);
+            layout.paragraph(&runs, Align::Left);
             layout.space(6.0);
         }
         for b in &ch.blocks {
             match b {
                 Block::Heading { level, text } => {
                     let size = base + f32::from(6 - 2 * (*level).min(3));
+                    let runs = [(text.clone(), bold(size))];
+                    layout.keep_with_next(&runs, 5.0 * MM + two_lines);
                     layout.space(2.0);
-                    layout.paragraph(&[(text.clone(), bold(size))], Align::Left);
+                    layout.paragraph(&runs, Align::Left);
                     layout.space(3.0);
                 }
                 Block::Paragraph { inlines, align } => {
@@ -543,8 +575,10 @@ pub(super) fn write_pdf(
                     if sep.is_empty() {
                         layout.y += fonts.regular().line_height(base) * layout.line_spacing;
                     } else {
+                        let runs = [(sep.clone(), plain(base))];
+                        layout.keep_with_next(&runs, 4.0 * MM + two_lines);
                         layout.space(2.0);
-                        layout.paragraph(&[(sep.clone(), plain(base))], Align::Center);
+                        layout.paragraph(&runs, Align::Center);
                         layout.space(2.0);
                     }
                 }
@@ -615,6 +649,35 @@ mod tests {
         // 30 + 2 + 30 = 62 passt in 65, mit dem dritten Wort nicht mehr.
         let lines = break_lines(vec![word(30.0), word(30.0), word(30.0)], 65.0);
         assert_eq!(lines.iter().map(Vec::len).collect::<Vec<_>>(), vec![2, 1]);
+    }
+
+    #[test]
+    fn ueberschrift_bleibt_nicht_allein_am_seitenende() {
+        let fonts = load_pdf_fonts("times").unwrap();
+        let mut layout = Layout {
+            fonts: &fonts,
+            line_spacing: 1.0,
+            left: 0.0,
+            width: 400.0,
+            top: 0.0,
+            bottom: 100.0,
+            pages: vec![],
+            y: 0.0,
+        };
+        layout.new_page();
+        layout.paragraph(&[("Text".into(), S)], Align::Left);
+        let heading = [("Überschrift".into(), S)];
+
+        // Oben auf der Seite ist genug Platz: bleibt auf Seite 1.
+        layout.keep_with_next(&heading, 30.0);
+        assert_eq!(layout.pages.len(), 1);
+
+        // Kurz vor Schluss passt die Überschrift selbst noch, der Folgetext
+        // nicht mehr: neue Seite.
+        layout.y = 80.0;
+        layout.keep_with_next(&heading, 30.0);
+        assert_eq!(layout.pages.len(), 2);
+        assert_eq!(layout.y, layout.top);
     }
 
     #[test]
