@@ -5,9 +5,19 @@ import { DocBackdrop } from "./DocBackdrop";
 import { EntityDoc } from "./EntityDoc";
 import type { Entity } from "../types";
 
-export const RESEARCH_KIND_LABELS: Record<PaneResearchKind, { singular: string; plural: string }> = {
-  characters: { singular: "Person", plural: "Personen" },
-  locations: { singular: "Ort", plural: "Orte" },
+/** `fresh`: Name eines neuen Eintrags, `add`: Tooltip zum Anlegen — beide
+ *  ausgeschrieben, weil das Genus nicht bei allen Arten gleich ist. */
+export const RESEARCH_KIND_LABELS: Record<
+  PaneResearchKind,
+  { singular: string; plural: string; fresh: string; add: string }
+> = {
+  characters: {
+    singular: "Person",
+    plural: "Personen",
+    fresh: "Neue Person",
+    add: "Neue Person anlegen",
+  },
+  locations: { singular: "Ort", plural: "Orte", fresh: "Neuer Ort", add: "Neuen Ort anlegen" },
 };
 
 /** Pane-Inhalt für Recherche: das Detail zum in der Sidebar gewählten Eintrag. */

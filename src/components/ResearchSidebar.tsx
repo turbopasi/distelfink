@@ -122,7 +122,7 @@ function ResearchGroup({ kind }: { kind: PaneResearchKind }) {
     try {
       const created = await api.saveEntity(kind, {
         id: "",
-        name: `Neue ${labels.singular}`,
+        name: labels.fresh,
       });
       const createdId = created.id;
       touchResearch();
@@ -144,7 +144,7 @@ function ResearchGroup({ kind }: { kind: PaneResearchKind }) {
         </span>
         <span>{labels.plural}</span>
         <button
-          title={`Neue ${labels.singular} anlegen`}
+          title={labels.add}
           onClick={(e) => {
             e.stopPropagation();
             void addItem();
