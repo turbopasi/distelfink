@@ -2,6 +2,7 @@
 
 import { api, sceneRelPath } from "../api";
 import { clearPlanTagAvatars } from "../components/planTagInfo";
+import { clearEntityImages } from "../components/EntityDoc";
 import { clearImageCache } from "../imageCache";
 import { computeStats, plainTextFromMarkdown, type TextStats } from "../stats";
 import { collectSceneIds, findNode } from "../tree";
@@ -157,6 +158,7 @@ export function createProjectSlice(set: SetState, get: GetState): ProjectSlice {
 
   const resetView = (project: ProjectInfo | null) => {
     clearImageCache();
+    clearEntityImages();
     reportedBrokenEntities.clear();
     resetPaneSavers();
     set({
@@ -401,6 +403,7 @@ export function createProjectSlice(set: SetState, get: GetState): ProjectSlice {
       await get().flushAll();
       try {
         const project = await api.openProject(root);
+        clearEntityImages();
         set((s) => ({ project, externalChanges: [], reloadCount: s.reloadCount + 1 }));
         void get().refreshSceneStats();
         // Offene Szenen neu einlesen (außer bei ungelöstem Konflikt).

@@ -16,6 +16,12 @@ import { Icon } from "./Icon";
  *  die IPC und verzögert das Anzeigen des Dokuments. */
 const imageCache = new Map<string, string | null>();
 
+/** Beim Projektwechsel und „Projekt neu laden“: dieselbe ID kann in einem
+ *  kopierten Projekt oder nach einem Sync ein anderes Bild haben. */
+export function clearEntityImages() {
+  imageCache.clear();
+}
+
 export function EntityDoc({
   kind,
   entity,
@@ -33,6 +39,8 @@ export function EntityDoc({
   const imageKey = `${kind}:${entity.id}`;
   const [image, setImage] = useState<string | null>(() => imageCache.get(imageKey) ?? null);
   const [metaOpen, setMetaOpen] = useState(false);
+  // Nach „Projekt neu laden“ ist der Bildspeicher leer: neu holen.
+  const reloadCount = useStore((s) => s.reloadCount);
 
   useEffect(() => {
     if (imageCache.has(imageKey)) return;
@@ -44,7 +52,7 @@ export function EntityDoc({
     return () => {
       alive = false;
     };
-  }, [kind, entity.id, imageKey]);
+  }, [kind, entity.id, imageKey, reloadCount]);
 
   async function saveName() {
     const trimmed = name.trim();
