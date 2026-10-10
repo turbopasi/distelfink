@@ -13,6 +13,7 @@ const KIND_ICON: Record<string, IconName> = {
   scene: "file-text",
   characters: "user",
   locations: "map-pin",
+  mindboard: "workflow",
 };
 
 const KIND_LABEL: Record<string, string> = {
@@ -20,6 +21,7 @@ const KIND_LABEL: Record<string, string> = {
   scene: "Dokument",
   characters: "Person",
   locations: "Ort",
+  mindboard: "Mindboard",
 };
 
 /** „Heute, 14:03" statt eines vollen Zeitstempels — das Datum trägt nur, wo
@@ -96,7 +98,7 @@ export function TrashPanel() {
 
       {items.length === 0 ? (
         <p className="muted">
-          Der Papierkorb ist leer. Gelöschte Ordner, Dokumente, Personen und Orte
+          Der Papierkorb ist leer. Gelöschte Ordner, Dokumente, Personen, Orte und Mindboards
           landen hier, bis sie endgültig gelöscht werden.
         </p>
       ) : (

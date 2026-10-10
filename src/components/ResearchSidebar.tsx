@@ -376,7 +376,7 @@ function MindboardItem({ id, name }: { id: string; name: string }) {
   }
 
   async function confirmDelete() {
-    const yes = await ask(`Mindboard "${name}" endgültig löschen?`, {
+    const yes = await ask(`Mindboard "${name}" löschen? (wandert in den Papierkorb des Projekts)`, {
       title: "Löschen",
       kind: "warning",
     });
@@ -389,6 +389,7 @@ function MindboardItem({ id, name }: { id: string; name: string }) {
       }
       await api.deleteMindboard(id);
       touchMindboards();
+      s.touchTrash();
     } catch (e) {
       useStore.setState({ error: String(e) });
     }

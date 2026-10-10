@@ -240,8 +240,9 @@ export function createProjectSlice(set: SetState, get: GetState): ProjectSlice {
       try {
         set({ project: await api.restoreTrash(key) });
         get().touchTrash();
-        // Der Eintrag kann eine Person oder ein Ort gewesen sein.
+        // Der Eintrag kann eine Person, ein Ort oder ein Mindboard gewesen sein.
         get().touchResearch();
+        get().touchMindboards();
         void get().refreshPlanIndex();
         await get().refreshSceneStats();
         await resyncFlows();

@@ -9,6 +9,7 @@
 
 use crate::fsutil::write_atomic;
 use crate::project::{make_id, validate_id, with_project, AppState, Saved};
+use crate::trash::{self, TrashKind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -300,13 +301,34 @@ pub fn rename_mindboard(
     })
 }
 
+/// Legt ein Board in den Papierkorb. Bilder darauf liegen in `images/` und
+/// bleiben, wo sie sind — das Board kommt beim Wiederherstellen vollständig zurück.
 #[tauri::command]
 pub fn delete_mindboard(id: String, state: tauri::State<AppState>) -> Result<(), String> {
     with_project(&state, |p| {
         validate_id(&id)?;
         let rel = rel_path(&id);
-        fs::remove_file(p.abs(&rel)).map_err(|e| format!("{rel} löschen: {e}"))?;
-        p.known_mtimes.remove(&rel);
+        // Der Name steht in der Datei; ohne ihn hieße der Eintrag im
+        // Papierkorb nur noch wie seine ID.
+        let title = read_board(p, &id)
+            .map(|b| b.name)
+            .unwrap_or_else(|_| id.clone());
+        let file =
+            trash::move_to_trash(p, &rel)?.ok_or(format!("Mindboard nicht gefunden: {id}"))?;
+        trash::record(
+            p,
+            trash::TrashItem {
+                key: trash::new_key(),
+                kind: TrashKind::Mindboard,
+                id,
+                title,
+                deleted_at: trash::now_ms(),
+                files: vec![file],
+                node: None,
+                parent_id: None,
+                index: 0,
+            },
+        )?;
         p.search_dirty = true;
         Ok(())
     })

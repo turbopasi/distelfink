@@ -39,6 +39,7 @@ pub enum TrashKind {
     Scene,
     Characters,
     Locations,
+    Mindboard,
     /// Notizen kennt Distelfink nicht mehr; alte Einträge gibt es noch.
     Note,
     /// Von einer neueren App-Version (zweiter Rechner per Sync): bleibt beim
@@ -221,7 +222,7 @@ pub fn restore_trash(key: String, state: tauri::State<AppState>) -> Result<Proje
                     .ok_or("Eintrag ohne Knotendaten — kann nicht zurück".to_string())?;
                 restore_binder_node(p, node, item.parent_id.as_deref(), item.index)?;
             }
-            TrashKind::Characters | TrashKind::Locations => {
+            TrashKind::Characters | TrashKind::Locations | TrashKind::Mindboard => {
                 // Die JSON-Datei ist der Eintrag; sie liegt wieder an Ort und Stelle.
             }
             // Notizen kennt Distelfink nicht mehr. Alte Papierkorb-Einträge
