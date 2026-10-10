@@ -2,12 +2,8 @@
 // Operation liefert ein neues Board, damit der Verlauf nur alte Stände
 // aufheben muss.
 
+import { newId } from "../../ids";
 import type { MindArrow, MindEdge, MindNode, Mindboard } from "../../types";
-
-/** Kurze ID, eindeutig innerhalb eines Boards. */
-export function newId(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
-}
 
 /** Verbindung zwischen zwei Notizen, egal in welcher Richtung. */
 export function findEdge(board: Mindboard, a: string, b: string): MindEdge | undefined {

@@ -17,6 +17,7 @@ import {
 } from "react";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
+import { newId } from "../ids";
 import { useStore } from "../store";
 import { ConflictBanner } from "./ConflictBanner";
 import { useAutosave } from "./useAutosave";
@@ -97,7 +98,7 @@ export function TimelinePanel() {
     snapshot: () => timelineRef.current!,
     write: async (tl: Timeline, force) => {
       const result = await api.saveTimeline(tl, force);
-      // Die Antwort trägt die vom Backend vergebenen IDs und Slots — nur
+      // Die Antwort trägt die vom Backend bereinigten Slots — nur
       // übernehmen, wenn seitdem nichts weiter geändert wurde.
       if (result.status === "ok" && timelineRef.current === tl) show(result.data);
       return result.status;
@@ -173,7 +174,7 @@ export function TimelinePanel() {
 
   function addTrack() {
     const track: TimelineTrack = {
-      id: "",
+      id: newId("strang"),
       name: `Strang ${tracks.length + 1}`,
       // Reihum durch die Palette, damit neue Stränge sich gleich unterscheiden.
       color: COLOR_PRESETS[tracks.length % COLOR_PRESETS.length],
@@ -214,7 +215,7 @@ export function TimelinePanel() {
     persistEvents([
       ...events,
       {
-        id: "",
+        id: newId("ereignis"),
         title: "Neues Ereignis",
         when: "",
         description: "",

@@ -45,9 +45,9 @@ import {
   type Point,
   type Rect,
 } from "./geometry";
+import { newId } from "../../ids";
 import {
   cloneNodes,
-  newId,
   patchNodes,
   removeItems,
   toggleConnections,

@@ -103,10 +103,12 @@ pub fn save_timeline(
     })
 }
 
-/// Vergibt fehlende IDs und sorgt dafür, dass es immer mindestens einen
-/// Strang gibt und jedes Ereignis in einem vorhandenen Strang hängt. Läuft
-/// beim Laden wie beim Speichern, damit die Oberfläche keine Sonderfälle
-/// kennen muss und alte Dateien ohne Stränge einfach mitwandern.
+/// Vergibt fehlende IDs (neue Einträge bringen ihre ID aus dem Frontend
+/// mit; fehlen kann sie nur in alten Dateien) und sorgt dafür, dass es immer
+/// mindestens einen Strang gibt und jedes Ereignis in einem vorhandenen
+/// Strang hängt. Läuft beim Laden wie beim Speichern, damit die Oberfläche
+/// keine Sonderfälle kennen muss und alte Dateien ohne Stränge einfach
+/// mitwandern.
 fn normalize(timeline: &mut Timeline) {
     if timeline.tracks.is_empty() {
         timeline.tracks.push(TimelineTrack {
