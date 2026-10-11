@@ -10,6 +10,64 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.14.0 — 2026-10-11
+
+Ein großes Stabilitäts-Update: Distelfink speichert verlässlicher, geht mit
+Sync auf mehreren Rechnern sorgfältiger um und hält Fehler in einem Bereich
+vom Rest fern. Dazu kommen ein PDF-Export mit echtem Blocksatz und ein
+Papierkorb für Mindboards.
+
+### Neu
+
+- **PDF im Blocksatz.** Exportvorlagen mit Blocksatz setzen Absätze im PDF
+  jetzt wirklich im Blocksatz, bisher kamen sie linksbündig. Überschriften und Szenentrenner
+  bleiben nicht mehr allein am Seitenende stehen, und überlange Wörter
+  werden am Rand geteilt, statt über ihn hinauszuragen.
+- **Mindboards landen im Papierkorb.** Ein gelöschtes Mindboard lässt sich
+  wie Dokumente, Personen und Orte wiederherstellen.
+
+### Verbessert
+
+- **Ein Fehler legt nicht mehr die ganze App lahm.** Geht in einem Bereich,
+  einer Seitenleiste oder einem Dialog etwas schief, fällt nur dieser Teil
+  aus. Der Rest läuft weiter, und ungespeicherter Text bleibt erhalten.
+- **Einheitliches Speichern überall.** Texte, Personen und Orte, Mindboards
+  und der Zeitstrahl speichern auf dieselbe Weise: nie zwei Schreibvorgänge
+  gleichzeitig, und bei Änderungen von außen (etwa über Sync) erscheint
+  überall derselbe Hinweis mit der Wahl zwischen Überschreiben und Neuladen.
+- **Offene Konflikte werden nicht übergangen.** Solange ein Schreibkonflikt
+  offen ist, fragt Distelfink nach, bevor das Projekt oder das Fenster
+  geschlossen oder ein Update installiert wird.
+- **„Projekt neu laden" erreicht alles.** Auch Zeitstrahl, Mindboards und
+  Personen- und Ortsdokumente lesen den neuen Stand ein, ebenso die Bilder
+  von Personen und Orten.
+- **Robuster gegen beschädigte Dateien.** Eine kaputte Personen- oder
+  Ortsdatei wird übersprungen und gemeldet, statt die ganze Liste
+  unbrauchbar zu machen.
+- **Das Bild einer Person oder eines Orts** wandert beim Löschen mit in den
+  Papierkorb und kommt beim Wiederherstellen mit zurück.
+
+### Behoben
+
+- **Zeitstrahl:** Ein Ereignis, das direkt nach dem Anlegen eines neuen
+  Strangs darin erstellt wurde, konnte im ersten Strang landen.
+- **Zeitstrahl:** Eine verspätete Speicher-Antwort konnte einen neueren
+  Stand überschreiben.
+- Das Öffnen eines Dokuments markierte es als ungespeichert und löste ein
+  unnötiges Speichern aus.
+- Nach dem Wechsel in ein anderes Projekt konnten Personen und Orte noch das
+  Bild aus dem vorigen Projekt zeigen (etwa bei einer Projektkopie).
+- Der Verlauf vergleicht im Fluss-Modus nur die gewählte Szene.
+- „Neuer Ort" statt „Neue Ort" beim Anlegen eines Orts.
+
+### Geändert
+
+- Strengere Sicherheitsregeln für die Oberfläche: Dateien werden nur noch
+  über die Dialoge der App ausgewählt, Pfade in Projektdateien werden
+  geprüft.
+- Technische Grundlage aktualisiert: neuer PDF-Satz (krilla), vite 8,
+  TypeScript 6, aktuelle Bibliotheken für Suche und Verlauf.
+
 ## 0.13.3 — 2026-10-08
 
 Ein Wartungs-Update: Distelfink reagiert flüssiger, vor allem bei Personen
