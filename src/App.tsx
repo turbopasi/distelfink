@@ -8,7 +8,7 @@ import { Binder } from "./components/Binder";
 import { RichEditor } from "./components/RichEditor";
 import { Corkboard } from "./components/Corkboard";
 import { QuickNav } from "./components/QuickNav";
-import { TimelinePanel } from "./components/TimelinePanel";
+import { TimelinePanel } from "./components/timeline/TimelinePanel";
 import { MindboardPanel } from "./components/mindboard/MindboardPanel";
 import { TrashPanel } from "./components/TrashPanel";
 import { ResearchPane } from "./components/ResearchPane";

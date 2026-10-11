@@ -1,0 +1,395 @@
+/* --------------------------------------------------------------------------
+   Zeitstrahl: Stränge als Bahnen untereinander, die Zeit läuft nach rechts.
+   Maße der Fläche (Kopfspalte, Lineal, Bahn, Einheit) setzt TimelineBoard
+   als Variablen am Element — es rechnet mit denselben Zahlen.
+   -------------------------------------------------------------------------- */
+
+.timeline {
+  flex: 1;
+  /* Läuft als Pane-Inhalt in einer Flex-Spalte — ohne min-height kein Scrollen. */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Gleiche Kopfleiste wie Mindboard und Personen/Orte. */
+.timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  min-height: var(--view-header-height);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.timeline-header h2 {
+  margin: 0;
+  font: var(--type-title);
+}
+
+.timeline-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.timeline-header-actions button {
+  min-height: 26px;
+  padding: 0 var(--space-4);
+}
+
+.timeline-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0 var(--space-3);
+  background: var(--border-hairline);
+}
+
+/* Fläche und Inspector nebeneinander. */
+.timeline-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* ------------------------------------------------------------------ Fläche */
+
+.tl-scroll {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  outline: none;
+  /* Ziehen auf der Fläche ist Verschieben oder Rahmen, nie Text markieren. */
+  user-select: none;
+}
+
+.tl-canvas {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+/* Das Lineal bleibt beim Blättern nach unten stehen. */
+.tl-ruler {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  height: var(--tl-ruler-h);
+  background: var(--surface-app);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.tl-ruler-corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: 0 0 var(--tl-header-w);
+  background: var(--surface-app);
+  border-right: 1px solid var(--border-hairline);
+}
+
+.tl-ruler-scale {
+  position: relative;
+  flex: 1;
+}
+
+.tl-tick {
+  position: absolute;
+  bottom: var(--space-2);
+  padding-left: var(--space-2);
+  border-left: 1px solid var(--border-subtle);
+  font: var(--type-mono);
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tl-lane {
+  display: flex;
+  height: var(--tl-lane-h);
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+/* Der Kopf eines Strangs bleibt beim seitlichen Blättern stehen — nach ein
+   paar Bildschirmbreiten weiß man sonst nicht mehr, welche Bahn welche ist. */
+.tl-track-head {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  flex: 0 0 var(--tl-header-w);
+  /* Sonst setzt die Mindestbreite des Namensfelds die Spalte breiter, als
+     die Fläche rechnet — und die Balken stünden neben dem Lineal. */
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-3) 0 var(--space-5);
+  background: var(--surface-app);
+  border-right: 1px solid var(--border-hairline);
+  box-shadow: inset 3px 0 0 var(--track);
+  user-select: text;
+}
+
+.tl-track-name {
+  flex: 1;
+  min-width: 0;
+  font: var(--type-ui-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-strong);
+  border-color: transparent;
+  background: transparent;
+  padding: 0 var(--space-2);
+  min-height: var(--control-height-sm);
+}
+
+.tl-track-name:hover {
+  border-color: var(--border-hairline);
+}
+
+/* Die Knöpfe erscheinen erst beim Überfahren — bis dahin gehört der Platz
+   dem Namen. */
+.tl-track-actions {
+  display: none;
+  gap: var(--space-1);
+}
+
+.tl-track-head:hover .tl-track-actions,
+.tl-track-head:focus-within .tl-track-actions {
+  display: flex;
+}
+
+.tl-track-actions button {
+  min-height: 22px;
+  padding: 0 var(--space-3);
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.tl-track-actions button:hover {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+/* Die Bahn: ein leises Raster — kräftigere Linien dort, wo das Lineal
+   beschriftet ist, feine je Einheit, sobald sie weit genug auseinander liegen. */
+.tl-lane-body {
+  position: relative;
+  flex: 1;
+  background-image: linear-gradient(to right, var(--border-hairline) 1px, transparent 1px);
+  background-size: var(--tl-major) 100%;
+  background-position-x: var(--tl-grid-shift);
+}
+
+.tl-lane-body.fine {
+  background-image:
+    linear-gradient(to right, var(--border-hairline) 1px, transparent 1px),
+    linear-gradient(
+      to right,
+      color-mix(in oklab, var(--border-hairline) 45%, transparent) 1px,
+      transparent 1px
+    );
+  background-size:
+    var(--tl-major) 100%,
+    var(--tl-unit) 100%;
+  background-position-x: var(--tl-grid-shift), 0;
+}
+
+/* ------------------------------------------------------------------ Balken */
+
+.tl-bar {
+  position: absolute;
+  top: var(--space-3);
+  bottom: var(--space-3);
+  z-index: 1;
+  display: flex;
+  min-width: 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--track);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  cursor: grab;
+}
+
+.tl-bar:hover {
+  border-color: var(--border-strong);
+  border-left-color: var(--track);
+}
+
+.tl-bar.selected {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow-1);
+}
+
+.tl-bar.dragging {
+  z-index: 2;
+  cursor: grabbing;
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow-2);
+}
+
+/* Ein Dokument, eine Person oder ein Ort kommt dazu: gestrichelte Kante,
+   damit man Verknüpfen und Verschieben auseinanderhält. */
+.tl-bar.drop-link {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+/* Der Inhalt schneidet ab, nicht der Balken selbst — sonst schnitte er auch
+   die Griffe an den Rändern ab, die über den Rahmen hinausragen. */
+.tl-bar-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-4);
+  overflow: hidden;
+}
+
+.tl-bar-title {
+  font: var(--type-ui-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-bar-title-input {
+  font: var(--type-ui-md);
+  font-weight: var(--weight-semibold);
+  min-height: auto;
+  padding: 0 var(--space-1);
+  margin: 0 calc(-1 * var(--space-1));
+  cursor: text;
+}
+
+.tl-bar-synopsis {
+  font: var(--type-small);
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* Die Griffe zum Ändern der Länge: schmale Streifen über beiden Enden,
+   samt Rahmen — man trifft sie auch ganz außen. */
+.tl-bar-edge {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.tl-bar-edge.left {
+  left: -5px;
+}
+
+.tl-bar-edge.right {
+  right: -5px;
+}
+
+/* Hilfslinie: eine Kante sitzt genau auf der Kante eines anderen Ereignisses. */
+.tl-guide {
+  position: absolute;
+  top: var(--tl-ruler-h);
+  z-index: 2;
+  width: 0;
+  border-left: 1px dashed var(--accent);
+  pointer-events: none;
+}
+
+.tl-box {
+  position: absolute;
+  z-index: 2;
+  border: 1px solid var(--accent);
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------- Inspector */
+
+/* Dieselben Bausteine wie die Personen- und Orte-Ansicht; nur die Kante zur
+   Fläche und die feste Breite kommen dazu. */
+.tl-inspector {
+  flex: 0 0 22rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6) var(--space-8);
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-left: 1px solid var(--border-hairline);
+  background: var(--surface-app);
+}
+
+/* Der Kopf richtet sich nach oben aus: bricht der Titel um, bleiben die
+   Knöpfe neben seiner ersten Zeile. */
+.tl-inspector .detail-header {
+  align-items: flex-start;
+}
+
+/* Der Titel ist ein Textfeld, damit lange Titel umbrechen — sonst wie das
+   Namensfeld von Personen und Orten. */
+.tl-inspector-title {
+  min-width: 0;
+  padding-top: var(--space-1);
+  padding-bottom: var(--space-1);
+  line-height: var(--leading-tight);
+  resize: none;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.tl-inspector .detail-header button {
+  margin-top: var(--space-2);
+}
+
+.tl-inspector .detail-header button {
+  min-height: 26px;
+  padding: 0 var(--space-3);
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.tl-inspector .detail-header button:hover {
+  background: var(--surface-hover);
+  color: var(--text-strong);
+}
+
+.tl-inspector-track {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: calc(-1 * var(--space-3));
+}
+
+.tl-inspector-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tl-inspector-field textarea {
+  padding: var(--space-3) var(--control-pad-x-sm);
+  resize: none;
+  overflow: hidden;
+  line-height: var(--leading-normal);
+}
+
+/* Die Abschnitte bringen eigenen Abstand mit; hier setzt schon gap ihn. */
+.tl-inspector .link-section {
+  margin-top: 0;
+}

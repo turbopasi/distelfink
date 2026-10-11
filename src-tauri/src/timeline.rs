@@ -1,4 +1,5 @@
-//! Zeitstrahl: `timeline.json` (Reihenfolge = Array-Reihenfolge).
+//! Zeitstrahl: `timeline.json`. Jedes Ereignis liegt als Balken auf einer
+//! gemeinsamen, abstrakten Zeitachse (Anfang + Länge in Rastereinheiten).
 
 use crate::fsutil::write_atomic;
 use crate::layout::TIMELINE_FILE;
@@ -27,6 +28,7 @@ pub struct TimelineEvent {
     /// Datumsformat, damit auch fiktive Kalender funktionieren.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub when: String,
+    /// Die Synopsis des Ereignisses.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub description: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -41,16 +43,21 @@ pub struct TimelineEvent {
     /// Strang" — so bleiben Dateien aus der Zeit vor den Strängen lesbar.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub track_id: String,
-    /// Platz auf der gemeinsamen Zeitachse. Gleicher Slot in zwei Strängen
-    /// heißt "zur selben Zeit"; übersprungene Slots sind gewollte Lücken.
-    /// Fehlt in Dateien aus der Zeit vor den Slots — `normalize` trägt ihn nach.
+    /// Anfang auf der Zeitachse in Rastereinheiten (darf negativ sein).
+    /// Fehlt nur in Dateien aus der Zeit der Slots — `normalize` trägt ihn nach.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<i32>,
+    /// Länge in Rastereinheiten, mindestens 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub length: Option<u32>,
+    /// Altes Raster (ein Platz pro Ereignis). Wird nur noch gelesen, um daraus
+    /// `start` und `length` zu machen.
+    #[serde(default, skip_serializing)]
     pub slot: Option<u32>,
 }
 
-/// Der ganze Zeitstrahl einer Datei: Stränge, Ereignisse, Ausrichtung.
-/// Die Reihenfolge im `events`-Array ist die Chronologie; innerhalb eines
-/// Strangs zaehlt die relative Reihenfolge seiner Ereignisse.
+/// Der ganze Zeitstrahl einer Datei: Stränge und Ereignisse. Innerhalb eines
+/// Strangs überlappen sich keine Ereignisse.
 #[derive(Serialize, Deserialize, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Timeline {
@@ -58,14 +65,14 @@ pub struct Timeline {
     pub tracks: Vec<TimelineTrack>,
     #[serde(default)]
     pub events: Vec<TimelineEvent>,
-    /// "columns" (Stränge nebeneinander, Zeit läuft nach unten) oder "rows"
-    /// (untereinander, Zeit läuft nach rechts). Leer = "columns".
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub orientation: String,
 }
 
 /// Name des Strangs, in dem Ereignisse aus der Zeit vor den Strängen landen.
 const DEFAULT_TRACK_NAME: &str = "Haupthandlung";
+
+/// Länge, die ein Ereignis aus der Slot-Zeit bekommt. Ein Slot wird zu so
+/// vielen Einheiten — die alte Ausrichtung bleibt damit genau erhalten.
+const DEFAULT_LENGTH: u32 = 4;
 
 #[tauri::command(async)]
 pub fn load_timeline(state: tauri::State<AppState>) -> Result<Timeline, String> {
@@ -105,10 +112,10 @@ pub fn save_timeline(
 
 /// Vergibt fehlende IDs (neue Einträge bringen ihre ID aus dem Frontend
 /// mit; fehlen kann sie nur in alten Dateien) und sorgt dafür, dass es immer
-/// mindestens einen Strang gibt und jedes Ereignis in einem vorhandenen
-/// Strang hängt. Läuft beim Laden wie beim Speichern, damit die Oberfläche
-/// keine Sonderfälle kennen muss und alte Dateien ohne Stränge einfach
-/// mitwandern.
+/// mindestens einen Strang gibt, jedes Ereignis in einem vorhandenen Strang
+/// hängt, Anfang und Länge hat und sich in seinem Strang mit nichts
+/// überlappt. Läuft beim Laden wie beim Speichern, damit die Oberfläche
+/// keine Sonderfälle kennen muss und alte Dateien einfach mitwandern.
 fn normalize(timeline: &mut Timeline) {
     if timeline.tracks.is_empty() {
         timeline.tracks.push(TimelineTrack {
@@ -131,16 +138,40 @@ fn normalize(timeline: &mut Timeline) {
             ev.track_id = first.clone();
         }
     }
-    // Slots: innerhalb eines Strangs streng steigend in Array-Reihenfolge.
-    // Dateien aus der Zeit vor den Slots bekommen so 0, 1, 2 …, doppelt
-    // belegte Slots lösen sich auf, und gewollte Lücken bleiben stehen, weil
-    // ein vorhandener größerer Slot immer gewinnt.
+    // Aus der Slot-Zeit: Slots innerhalb eines Strangs streng steigend in
+    // Array-Reihenfolge (Dateien ganz ohne Slots bekommen 0, 1, 2 …), dann
+    // wird jeder Slot zu DEFAULT_LENGTH Einheiten.
     let mut last: HashMap<String, u32> = HashMap::new();
     for ev in timeline.events.iter_mut() {
-        let next = last.get(&ev.track_id).map_or(0, |prev| prev + 1);
-        let slot = ev.slot.unwrap_or(next).max(next);
-        ev.slot = Some(slot);
-        last.insert(ev.track_id.clone(), slot);
+        if ev.start.is_none() {
+            let next = last.get(&ev.track_id).map_or(0, |prev| prev + 1);
+            let slot = ev.slot.unwrap_or(next).max(next);
+            last.insert(ev.track_id.clone(), slot);
+            ev.start = Some((slot * DEFAULT_LENGTH) as i32);
+        }
+        ev.slot = None;
+        ev.length = Some(ev.length.unwrap_or(DEFAULT_LENGTH).max(1));
+    }
+    // Strangweise nach Anfang sortiert schreiben, damit die Datei stabil
+    // bleibt; dabei lösen sich Überlappungen (Sync, Handarbeit an der Datei)
+    // auf, indem das spätere Ereignis hinter das frühere rückt.
+    let order: HashMap<String, usize> = timeline
+        .tracks
+        .iter()
+        .enumerate()
+        .map(|(i, t)| (t.id.clone(), i))
+        .collect();
+    timeline
+        .events
+        .sort_by_key(|ev| (order[&ev.track_id], ev.start.unwrap_or(0)));
+    let mut end: HashMap<String, i32> = HashMap::new();
+    for ev in timeline.events.iter_mut() {
+        let mut start = ev.start.unwrap_or(0);
+        if let Some(&prev_end) = end.get(&ev.track_id) {
+            start = start.max(prev_end);
+        }
+        ev.start = Some(start);
+        end.insert(ev.track_id.clone(), start + ev.length.unwrap_or(1) as i32);
     }
 }
 
@@ -148,22 +179,58 @@ fn normalize(timeline: &mut Timeline) {
 mod tests {
     use super::*;
 
+    fn track(id: &str) -> TimelineTrack {
+        TimelineTrack {
+            id: id.into(),
+            name: id.to_uppercase(),
+            color: String::new(),
+        }
+    }
+
+    /// Kleines Ereignis für die Tests, noch ohne Platz auf der Achse.
+    fn ev(id: &str, track: &str) -> TimelineEvent {
+        TimelineEvent {
+            id: id.into(),
+            title: id.into(),
+            when: String::new(),
+            description: String::new(),
+            scene_ids: Vec::new(),
+            character_ids: Vec::new(),
+            location_ids: Vec::new(),
+            track_id: track.into(),
+            start: None,
+            length: None,
+            slot: None,
+        }
+    }
+
+    fn at(id: &str, track: &str, start: i32, length: u32) -> TimelineEvent {
+        TimelineEvent {
+            start: Some(start),
+            length: Some(length),
+            ..ev(id, track)
+        }
+    }
+
+    fn slotted(id: &str, track: &str, slot: Option<u32>) -> TimelineEvent {
+        TimelineEvent {
+            slot,
+            ..ev(id, track)
+        }
+    }
+
+    fn spans(tl: &Timeline) -> Vec<(&str, i32, u32)> {
+        tl.events
+            .iter()
+            .map(|e| (e.id.as_str(), e.start.unwrap(), e.length.unwrap()))
+            .collect()
+    }
+
     #[test]
     fn alte_zeitstrahl_dateien_bekommen_einen_strang() {
         let mut tl = Timeline {
             tracks: Vec::new(),
-            events: vec![TimelineEvent {
-                id: "e-1".into(),
-                title: "Ankunft".into(),
-                when: String::new(),
-                description: String::new(),
-                scene_ids: Vec::new(),
-                character_ids: Vec::new(),
-                location_ids: Vec::new(),
-                track_id: String::new(),
-                slot: None,
-            }],
-            orientation: String::new(),
+            events: vec![ev("e-1", "")],
         };
         normalize(&mut tl);
         assert_eq!(tl.tracks.len(), 1);
@@ -174,98 +241,74 @@ mod tests {
     #[test]
     fn ereignis_im_geloeschten_strang_faellt_auf_den_ersten_zurueck() {
         let mut tl = Timeline {
-            tracks: vec![
-                TimelineTrack {
-                    id: "a".into(),
-                    name: "A".into(),
-                    color: String::new(),
-                },
-                TimelineTrack {
-                    id: "b".into(),
-                    name: "B".into(),
-                    color: String::new(),
-                },
-            ],
-            events: vec![TimelineEvent {
-                id: "e-1".into(),
-                title: "Ankunft".into(),
-                when: String::new(),
-                description: String::new(),
-                scene_ids: Vec::new(),
-                character_ids: Vec::new(),
-                location_ids: Vec::new(),
-                track_id: "weg".into(),
-                slot: None,
-            }],
-            orientation: String::new(),
+            tracks: vec![track("a"), track("b")],
+            events: vec![ev("e-1", "weg")],
         };
         normalize(&mut tl);
         assert_eq!(tl.events[0].track_id, "a");
     }
 
-    /// Kleines Ereignis fuer die Slot-Tests.
-    fn ev(id: &str, track: &str, slot: Option<u32>) -> TimelineEvent {
-        TimelineEvent {
-            id: id.into(),
-            title: id.into(),
-            when: String::new(),
-            description: String::new(),
-            scene_ids: Vec::new(),
-            character_ids: Vec::new(),
-            location_ids: Vec::new(),
-            track_id: track.into(),
-            slot,
-        }
+    #[test]
+    fn dateien_ohne_slots_werden_strangweise_aufgereiht() {
+        let mut tl = Timeline {
+            tracks: vec![track("a"), track("b")],
+            events: vec![ev("a1", "a"), ev("b1", "b"), ev("a2", "a")],
+        };
+        normalize(&mut tl);
+        // Jeder Strang beginnt bei null — so steht alles nebeneinander, wie
+        // es vor den Slots aussah.
+        assert_eq!(spans(&tl), vec![("a1", 0, 4), ("a2", 4, 4), ("b1", 0, 4)]);
     }
 
     #[test]
-    fn vergibt_slots_fuer_alte_dateien() {
+    fn slots_werden_zu_anfang_und_laenge_mit_luecken() {
         let mut tl = Timeline {
-            tracks: vec![
-                TimelineTrack {
-                    id: "a".into(),
-                    name: "A".into(),
-                    color: String::new(),
-                },
-                TimelineTrack {
-                    id: "b".into(),
-                    name: "B".into(),
-                    color: String::new(),
-                },
-            ],
+            tracks: vec![track("a")],
             events: vec![
-                ev("a1", "a", None),
-                ev("a2", "a", None),
-                ev("b1", "b", None),
+                slotted("a1", "a", Some(2)),
+                slotted("a2", "a", Some(2)),
+                slotted("a3", "a", Some(7)),
             ],
-            orientation: String::new(),
         };
         normalize(&mut tl);
-        // Jeder Strang zaehlt fuer sich ab null — so steht alles nebeneinander,
-        // wie es vor den Slots aussah.
-        assert_eq!(tl.events[0].slot, Some(0));
-        assert_eq!(tl.events[1].slot, Some(1));
-        assert_eq!(tl.events[2].slot, Some(0));
+        assert_eq!(spans(&tl), vec![("a1", 8, 4), ("a2", 12, 4), ("a3", 28, 4)]);
+        assert!(tl.events.iter().all(|e| e.slot.is_none()));
     }
 
     #[test]
-    fn haelt_luecken_und_loest_doppelte_slots_auf() {
+    fn ueberlappungen_loesen_sich_auf() {
         let mut tl = Timeline {
-            tracks: vec![TimelineTrack {
-                id: "a".into(),
-                name: "A".into(),
-                color: String::new(),
-            }],
+            tracks: vec![track("a"), track("b")],
             events: vec![
-                ev("a1", "a", Some(2)),
-                ev("a2", "a", Some(2)),
-                ev("a3", "a", Some(7)),
+                at("a2", "a", 3, 2),
+                at("a1", "a", 0, 5),
+                at("b1", "b", 1, 3),
             ],
-            orientation: String::new(),
         };
         normalize(&mut tl);
-        assert_eq!(tl.events[0].slot, Some(2));
-        assert_eq!(tl.events[1].slot, Some(3));
-        assert_eq!(tl.events[2].slot, Some(7));
+        // a2 rückt hinter a1; der andere Strang bleibt unberührt.
+        assert_eq!(spans(&tl), vec![("a1", 0, 5), ("a2", 5, 2), ("b1", 1, 3)]);
+    }
+
+    #[test]
+    fn negative_anfaenge_bleiben_und_laenge_ist_mindestens_eins() {
+        let mut tl = Timeline {
+            tracks: vec![track("a")],
+            events: vec![at("a1", "a", -6, 0)],
+        };
+        normalize(&mut tl);
+        assert_eq!(spans(&tl), vec![("a1", -6, 1)]);
+    }
+
+    #[test]
+    fn slot_wird_nicht_mehr_geschrieben() {
+        let mut tl = Timeline {
+            tracks: vec![track("a")],
+            events: vec![slotted("a1", "a", Some(1))],
+        };
+        normalize(&mut tl);
+        let json = serde_json::to_string(&tl).unwrap();
+        assert!(!json.contains("slot"));
+        assert!(json.contains(r#""start":4"#));
     }
 }

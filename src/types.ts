@@ -81,11 +81,13 @@ export interface TimelineEvent {
   characterIds?: string[];
   /** Orte, an denen das Ereignis spielt. */
   locationIds?: string[];
-  /** Handlungsstrang; leer heißt „erster Strang" (Dateien vor den Strängen). */
-  trackId?: string;
-  /** Position auf der gemeinsamen Zeitachse. Gleicher Slot in zwei Strängen
-   *  heißt „zur selben Zeit"; ausgelassene Slots sind gewollte Lücken. */
-  slot?: number;
+  /** Handlungsstrang. Das Backend hängt jedes Ereignis in einen vorhandenen. */
+  trackId: string;
+  /** Anfang auf der gemeinsamen Zeitachse in Rastereinheiten (darf negativ
+   *  sein). Gleicher Anfang in zwei Strängen heißt „zur selben Zeit". */
+  start: number;
+  /** Länge in Rastereinheiten, mindestens 1. */
+  length: number;
 }
 
 /** Ein Handlungsstrang. `color` ist ein Wert aus COLOR_PRESETS, "" = keine. */
@@ -95,15 +97,11 @@ export interface TimelineTrack {
   color?: string;
 }
 
-/** Stränge nebeneinander (Zeit läuft nach unten) oder untereinander (nach rechts). */
-export type TimelineOrientation = "columns" | "rows";
-
-/** Der ganze Zeitstrahl, so wie er in timeline.json steht. Die Reihenfolge im
- *  events-Array ist die Chronologie; ein Strang sieht davon seinen Anteil. */
+/** Der ganze Zeitstrahl, so wie er in timeline.json steht. Innerhalb eines
+ *  Strangs überlappen sich keine Ereignisse. */
 export interface Timeline {
   tracks: TimelineTrack[];
   events: TimelineEvent[];
-  orientation?: TimelineOrientation | "";
 }
 
 /** Art einer Mindboard-Notiz: freier Text, Bild oder Verweis. */
