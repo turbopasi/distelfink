@@ -174,8 +174,7 @@ select {
 }
 
 /* Zahlen, Zeitstempel und Kürzel lügen nicht und zappeln nicht. */
-kbd,
-.mono {
+kbd {
   font: var(--type-mono);
 }
 
@@ -185,15 +184,6 @@ kbd,
 
 .small {
   font-size: var(--text-xs);
-}
-
-/* Abschnittsüberschriften in den Leisten: 11px Kapitälchen, das einzige
-   Nicht-Satzschrift-Element im ganzen Produkt. */
-.caps {
-  font: var(--weight-semibold) var(--text-2xs) / var(--leading-normal) var(--font-sans);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-  color: var(--text-faint);
 }
 
 .icon {
@@ -210,11 +200,6 @@ kbd,
 button > .icon,
 button > .icon:only-child {
   margin-right: 0;
-}
-
-.icon-sm {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
 }
 
 /* Reine Symbolknöpfe bleiben quadratisch und farblos, bis man sie berührt. */

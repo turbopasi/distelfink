@@ -19,8 +19,6 @@ import { useDocImage } from "../DocImage";
 import { Icon } from "../Icon";
 import { cachedPlanTagAvatar, loadPlanTagAvatar } from "../planTagInfo";
 
-/** Breite, ab der Text ohne feste Breite umbricht. */
-export const TEXT_MAX_WIDTH = 260;
 /** Breite neu abgelegter Bilder. */
 export const IMAGE_DEFAULT_WIDTH = 240;
 

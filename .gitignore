@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Von tsc erzeugt (tsconfig.node.json ist composite)
+*.tsbuildinfo
