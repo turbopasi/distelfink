@@ -5,7 +5,7 @@
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { PlanTag } from "./PlanTag";
 import {
   choosePlanTagTarget,
@@ -14,8 +14,15 @@ import {
   PlanTagCommand,
 } from "./planTagCommand";
 
-const makeEditor = (content: string, withCommand = false) =>
-  new Editor({
+// Jeder Editor wird nach dem Test zerstört: sonst feuert ein Timer von
+// ProseMirror, wenn jsdom schon abgebaut ist („document is not defined“).
+const editors: Editor[] = [];
+afterEach(() => {
+  editors.splice(0).forEach((e) => e.destroy());
+});
+
+const makeEditor = (content: string, withCommand = false) => {
+  const editor = new Editor({
     element: document.createElement("div"),
     extensions: [
       StarterKit,
@@ -25,6 +32,9 @@ const makeEditor = (content: string, withCommand = false) =>
     ],
     content,
   });
+  editors.push(editor);
+  return editor;
+};
 
 const getMd = (editor: Editor): string => (editor.storage as any).markdown.getMarkdown();
 

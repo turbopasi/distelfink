@@ -3,7 +3,7 @@
 import { Editor, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { AlignedHeading, AlignedParagraph, MarkdownTextAlign } from "./TextAlignMarkdown";
 
 const extensions = [
@@ -14,8 +14,18 @@ const extensions = [
   MarkdownTextAlign.configure({ types: ["heading", "paragraph"] }),
 ];
 
-const makeEditor = (content: string) =>
-  new Editor({ element: document.createElement("div"), extensions, content });
+// Jeder Editor wird nach dem Test zerstört: sonst feuert ein Timer von
+// ProseMirror, wenn jsdom schon abgebaut ist („document is not defined“).
+const editors: Editor[] = [];
+afterEach(() => {
+  editors.splice(0).forEach((e) => e.destroy());
+});
+
+const makeEditor = (content: string) => {
+  const editor = new Editor({ element: document.createElement("div"), extensions, content });
+  editors.push(editor);
+  return editor;
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const getMd = (editor: Editor): string => (editor.storage as any).markdown.getMarkdown();
