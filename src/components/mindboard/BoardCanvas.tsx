@@ -11,7 +11,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type DragEvent,
   type KeyboardEvent,
   type PointerEvent,
@@ -53,7 +52,9 @@ import {
   toggleConnections,
 } from "./model";
 import type { UpdateOptions } from "./MindboardPanel";
+import { EdgeLayer, type EdgeGeometry, type EdgeHandlers } from "./EdgeLayer";
 import { IMAGE_DEFAULT_WIDTH, NoteView, type NoteHandlers } from "./NoteView";
+import { ShapeView, type ShapeHandlers } from "./ShapeView";
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 4;
@@ -1134,6 +1135,54 @@ export function BoardCanvas({
 
   // ---------------------------------------------------------------- Zeichnen
 
+  const shapeHandlers: ShapeHandlers = {
+    onHeadPointerDown: onShapePointerDown,
+    onEdit: (shape) => setEditingShape(shape.id),
+    onContextMenu: (e, shape) => {
+      select([], [shape.id]);
+      openMenu(e, shapeMenu(shape));
+    },
+    onResizeStart: onShapeResizeStart,
+    onCommitTitle: (shape, title) => {
+      setEditingShape(null);
+      const b = getBoard();
+      if (title !== (shape.title ?? "")) {
+        update({
+          ...b,
+          shapes: b.shapes.map((x) => (x.id === shape.id ? { ...x, title } : x)),
+        });
+      }
+      focusBoard();
+    },
+  };
+
+  const selectEdge = (edge: MindEdge) => {
+    focusBoard();
+    setSelNodes([]);
+    setSelShapes([]);
+    setSelEdge(edge.id);
+  };
+
+  const edgeHandlers: EdgeHandlers = {
+    onSelect: selectEdge,
+    onEdit: (edge) => setEditingEdge(edge.id),
+    onContextMenu: (e, edge) => {
+      selectEdge(edge);
+      openMenu(e, edgeMenu(edge));
+    },
+    onCommitLabel: (edge, label) => {
+      setEditingEdge(null);
+      const b = getBoard();
+      if (label !== (edge.label ?? "")) {
+        update({
+          ...b,
+          edges: b.edges.map((x) => (x.id === edge.id ? { ...x, label } : x)),
+        });
+      }
+      focusBoard();
+    },
+  };
+
   const nodesById = useMemo(() => new Map(board.nodes.map((n) => [n.id, n])), [board.nodes]);
 
   const edgeGeometry = board.edges
@@ -1147,7 +1196,7 @@ export function BoardCanvas({
       );
       return line ? { edge, line } : null;
     })
-    .filter((g): g is { edge: MindEdge; line: { a: Point; b: Point } } => !!g);
+    .filter((g): g is EdgeGeometry => !!g);
 
   const zoomPct = Math.round(view.zoom * 100);
 
@@ -1236,177 +1285,21 @@ export function BoardCanvas({
           style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}
         >
           {board.shapes.map((s) => (
-            <div
+            <ShapeView
               key={s.id}
-              className={`mb-shape ${s.color ? "mb-colored" : ""} ${selShapes.includes(s.id) ? "selected" : ""}`}
-              style={
-                {
-                  left: s.x,
-                  top: s.y,
-                  width: s.w,
-                  height: s.h,
-                  ...(s.color ? { "--mb-color": s.color } : {}),
-                } as CSSProperties
-              }
-            >
-              <div
-                className="mb-shape-head"
-                onPointerDown={(e) => onShapePointerDown(e, s)}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  setEditingShape(s.id);
-                }}
-                onContextMenu={(e) => {
-                  select([], [s.id]);
-                  openMenu(e, shapeMenu(s));
-                }}
-              >
-                {editingShape === s.id ? (
-                  <input
-                    autoFocus
-                    className="mb-shape-title-input"
-                    defaultValue={s.title ?? ""}
-                    placeholder="Titel"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => {
-                      e.stopPropagation();
-                      if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
-                    }}
-                    onBlur={(e) => {
-                      setEditingShape(null);
-                      const title = e.currentTarget.value.trim();
-                      const b = getBoard();
-                      if (title !== (s.title ?? "")) {
-                        update({
-                          ...b,
-                          shapes: b.shapes.map((x) => (x.id === s.id ? { ...x, title } : x)),
-                        });
-                      }
-                      focusBoard();
-                    }}
-                  />
-                ) : (
-                  <span className="mb-shape-title">{s.title || " "}</span>
-                )}
-              </div>
-              {selShapes.includes(s.id) && (
-                <span
-                  className="mb-resize"
-                  title="Größe ändern"
-                  onPointerDown={(e) => onShapeResizeStart(e, s)}
-                />
-              )}
-            </div>
+              shape={s}
+              selected={selShapes.includes(s.id)}
+              editing={editingShape === s.id}
+              handlers={shapeHandlers}
+            />
           ))}
-          <svg className="mb-edges" width="1" height="1">
-            <defs>
-              {["", "-sel"].map((suffix) => (
-                <marker
-                  key={suffix}
-                  id={`${markerId}-arrow${suffix}`}
-                  viewBox="0 0 10 10"
-                  refX="9"
-                  refY="5"
-                  markerWidth="8"
-                  markerHeight="8"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M0,1 L9,5 L0,9 z" className={`mb-arrow${suffix}`} />
-                </marker>
-              ))}
-            </defs>
-            {edgeGeometry.map(({ edge, line }) => {
-              const sel = selEdge === edge.id;
-              const marker = `url(#${markerId}-arrow${sel ? "-sel" : ""})`;
-              const arrow = edge.arrow || "none";
-              return (
-                <g key={edge.id} className={`mb-edge ${sel ? "selected" : ""}`}>
-                  <line
-                    x1={line.a.x}
-                    y1={line.a.y}
-                    x2={line.b.x}
-                    y2={line.b.y}
-                    markerEnd={arrow !== "none" ? marker : undefined}
-                    markerStart={arrow === "both" ? marker : undefined}
-                  />
-                  <line
-                    className="mb-edge-hit"
-                    x1={line.a.x}
-                    y1={line.a.y}
-                    x2={line.b.x}
-                    y2={line.b.y}
-                    onPointerDown={(e) => {
-                      if (e.button !== 0) return;
-                      e.stopPropagation();
-                      focusBoard();
-                      setSelNodes([]);
-                      setSelShapes([]);
-                      setSelEdge(edge.id);
-                    }}
-                    onDoubleClick={(e) => {
-                      e.stopPropagation();
-                      setEditingEdge(edge.id);
-                    }}
-                    onContextMenu={(e) => {
-                      setSelEdge(edge.id);
-                      openMenu(e, edgeMenu(edge));
-                    }}
-                  />
-                </g>
-              );
-            })}
-          </svg>
-          {edgeGeometry.map(({ edge, line }) => {
-            const editing = editingEdge === edge.id;
-            if (!edge.label && !editing) return null;
-            const mid = { x: (line.a.x + line.b.x) / 2, y: (line.a.y + line.b.y) / 2 };
-            return editing ? (
-              <input
-                key={edge.id}
-                autoFocus
-                className="mb-label-editor"
-                style={{ left: mid.x, top: mid.y }}
-                defaultValue={edge.label ?? ""}
-                placeholder="Beschriftung"
-                onPointerDown={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
-                }}
-                onBlur={(e) => {
-                  setEditingEdge(null);
-                  const label = e.currentTarget.value.trim();
-                  const b = getBoard();
-                  if (label !== (edge.label ?? "")) {
-                    update({
-                      ...b,
-                      edges: b.edges.map((x) => (x.id === edge.id ? { ...x, label } : x)),
-                    });
-                  }
-                  focusBoard();
-                }}
-              />
-            ) : (
-              <span
-                key={edge.id}
-                className={`mb-label ${selEdge === edge.id ? "selected" : ""}`}
-                style={{ left: mid.x, top: mid.y }}
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  setSelNodes([]);
-                  setSelShapes([]);
-                  setSelEdge(edge.id);
-                }}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  setEditingEdge(edge.id);
-                }}
-                onContextMenu={(e) => openMenu(e, edgeMenu(edge))}
-              >
-                {edge.label}
-              </span>
-            );
-          })}
+          <EdgeLayer
+            edges={edgeGeometry}
+            markerId={markerId}
+            selected={selEdge}
+            editing={editingEdge}
+            handlers={edgeHandlers}
+          />
           {board.nodes.map((n) => (
             <NoteView
               key={n.id}
