@@ -10,6 +10,41 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.15.0 — 2026-10-12
+
+Der Zeitstrahl ist neu: Ereignisse liegen als Balken auf einer freien
+Zeitachse und lassen sich direkt mit der Maus verschieben, verlängern und
+zwischen den Handlungssträngen umsetzen.
+
+### Neu
+
+- **Zeitstrahl als freie Zeitachse.** Die Stränge stehen untereinander, die
+  Zeit läuft nach rechts. Jedes Ereignis ist ein Balken mit eigenem Anfang
+  und eigener Länge, darauf Titel und Synopsis.
+- **Verschieben und Verlängern mit der Maus.** Balken lassen sich ziehen,
+  auch in einen anderen Strang, und an ihren Rändern länger oder kürzer
+  machen. Sie rasten am Raster und an den Kanten anderer Ereignisse ein;
+  eine Hilfslinie zeigt, woran. Mit gedrückter Alt-Taste geht es ohne
+  Magnet.
+- **Kein Überlappen.** Innerhalb eines Strangs liegt nie ein Ereignis auf
+  einem anderen. Ist der Platz unter dem Zeiger belegt, bleibt der Balken
+  am letzten freien Platz stehen; dahinter liegende Lücken erreicht er,
+  indem er über das Hindernis springt.
+- **Mehrere auf einmal.** Mit einem Rahmen oder Umschalt/Strg-Klick
+  markierte Ereignisse lassen sich gemeinsam verschieben, auch mit den
+  Pfeiltasten.
+- **Details in der Seitenleiste.** Ist ein Ereignis markiert, zeigt rechts
+  eine Leiste Titel, „Wann?", Synopsis und die verknüpften Personen, Orte
+  und Dokumente.
+- Neues Ereignis per Doppelklick auf eine freie Stelle, Umbenennen per
+  Doppelklick auf den Balken, Zoomen mit Strg+Mausrad.
+
+### Geändert
+
+- Die Ansicht mit Strängen nebeneinander (Zeit läuft nach unten) und die
+  Lücken-Befehle entfallen. Bestehende Zeitstrahlen werden beim Öffnen
+  übernommen und behalten ihre Anordnung.
+
 ## 0.14.0 — 2026-10-11
 
 Ein großes Stabilitäts-Update: Distelfink speichert verlässlicher, geht mit
