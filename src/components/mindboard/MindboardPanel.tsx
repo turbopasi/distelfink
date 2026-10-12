@@ -161,6 +161,22 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
     [root, boardId],
   );
 
+  /** Umbenennen direkt im Board — derselbe Weg wie in der Seitenleiste. */
+  const rename = useCallback(
+    (next: string) => {
+      if (!next || next === name) return;
+      setName(next);
+      void api
+        .renameMindboard(boardId, next)
+        .then(() => useStore.getState().touchMindboards())
+        .catch((e) => {
+          setName(name);
+          useStore.setState({ error: String(e) });
+        });
+    },
+    [boardId, name],
+  );
+
   const step = useCallback(
     (dir: "undo" | "redo") => {
       const current = boardRef.current;
@@ -192,6 +208,7 @@ export function MindboardPanel({ boardId, paneId }: { boardId: string; paneId: P
       <BoardCanvas
         board={board}
         name={name}
+        onRename={rename}
         paneId={paneId}
         update={update}
         getBoard={() => boardRef.current!}

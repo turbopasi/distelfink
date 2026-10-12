@@ -27,6 +27,9 @@
 }
 
 .mb-toolbar h2 {
+  /* In schmalen Panes weicht erst der Titel, dann brechen die Knöpfe um. */
+  flex: 0 1000 auto;
+  min-width: 4em;
   margin: 0;
   font: var(--type-title);
   overflow: hidden;
@@ -34,16 +37,47 @@
   white-space: nowrap;
 }
 
+.mb-toolbar .mb-title {
+  /* Etwas Luft für die Hover-Fläche, ohne dass der Text verrutscht. */
+  margin: 0 calc(-1 * var(--space-2));
+  padding: 0 var(--space-2);
+  cursor: text;
+  border-radius: var(--radius-sm);
+}
+
+.mb-title:hover {
+  background: var(--surface-hover);
+}
+
+/* Gleiche Schrift und Höhe wie der Titel, damit beim Umbenennen nichts springt. */
+.mb-title-input {
+  flex: 0 1000 auto;
+  min-width: 8em;
+  width: 24em;
+  margin: 0;
+  padding: 0 var(--space-2);
+  font: var(--type-title);
+}
+
 .mb-toolbar-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: var(--space-2);
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .mb-toolbar-actions button {
   min-height: 26px;
   padding: 0 var(--space-4);
+}
+
+/* Farbe der Vorgabe statt Palettensymbol. */
+.mb-style-dot {
+  width: 10px;
+  height: 10px;
+  margin: 0;
 }
 
 .mb-zoom {
@@ -140,6 +174,7 @@
 }
 
 .mb-note.mb-border-line,
+.mb-note.mb-border-dashed,
 .mb-note.mb-border-rounded,
 .mb-note.mb-border-cloud {
   border-color: var(--border-strong);
@@ -147,14 +182,19 @@
 }
 
 .mb-note.mb-colored.mb-border-line,
+.mb-note.mb-colored.mb-border-dashed,
 .mb-note.mb-colored.mb-border-rounded,
 .mb-note.mb-colored.mb-border-cloud {
   border-color: var(--mb-color);
   background: color-mix(in srgb, var(--mb-color) 14%, var(--surface-card));
 }
 
+.mb-note.mb-border-dashed {
+  border-style: dashed;
+}
+
 .mb-note.mb-border-rounded {
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .mb-note.mb-border-cloud {
@@ -182,6 +222,29 @@
   cursor: text;
 }
 
+/* Textnotizen: Spalte, damit die vertikale Ausrichtung in einer höher
+   gezogenen Notiz greift. */
+.mb-note.mb-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.mb-note.mb-valign-middle {
+  justify-content: center;
+}
+
+.mb-note.mb-valign-bottom {
+  justify-content: flex-end;
+}
+
+.mb-note.mb-align-center {
+  text-align: center;
+}
+
+.mb-note.mb-align-right {
+  text-align: right;
+}
+
 .mb-text-body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -202,6 +265,7 @@
   color: inherit;
   font: inherit;
   line-height: inherit;
+  text-align: inherit;
   user-select: text;
 }
 

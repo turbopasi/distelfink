@@ -66,11 +66,14 @@ export function NoteView({
   };
   if (node.color) (style as Record<string, string>)["--mb-color"] = node.color;
   if (node.kind === "text" && node.w) style.width = node.w;
+  if (node.kind === "text" && node.h) style.minHeight = node.h;
 
   const classes = [
     "mb-note",
     `mb-${node.kind}`,
     `mb-border-${node.border || "none"}`,
+    `mb-align-${node.align || "left"}`,
+    `mb-valign-${node.valign || "top"}`,
     node.color ? "mb-colored" : "",
     selected ? "selected" : "",
     editing ? "editing" : "",

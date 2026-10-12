@@ -174,12 +174,14 @@ export async function exportBoardPng(
     const accent = n.color || "";
     if (accent || border !== "none") {
       ctx.fillStyle = accent ? mix(host, accent, 14, card) : card;
-      roundRect(ctx, r, border === "cloud" ? r.h / 2 : border === "rounded" ? 8 : 2);
+      roundRect(ctx, r, border === "cloud" ? r.h / 2 : border === "rounded" ? 12 : 2);
       ctx.fill();
       if (border !== "none") {
         ctx.strokeStyle = accent || border;
         ctx.lineWidth = 1.25;
+        ctx.setLineDash(border === "dashed" ? [4, 3] : []);
         ctx.stroke();
+        ctx.setLineDash([]);
       }
     }
     const size = n.fontSize || baseSize;
@@ -189,9 +191,17 @@ export async function exportBoardPng(
     const label = n.kind === "text" ? (n.text ?? "") : (el?.innerText.trim() ?? "");
     const lineHeight = size * 1.35;
     const lines = wrap(ctx, label, r.w - NOTE_PAD_X * 2 + 1);
-    lines.forEach((l, i) =>
-      ctx.fillText(l, r.x + NOTE_PAD_X, r.y + NOTE_PAD_Y + i * lineHeight),
-    );
+    // Ausrichtung wie auf dem Board: waagrecht per textAlign, senkrecht der
+    // freie Platz einer höher gezogenen Notiz oben, halb oder unten.
+    const align = n.kind === "text" ? n.align || "left" : "left";
+    const valign = n.kind === "text" ? n.valign || "top" : "top";
+    const tx =
+      align === "center" ? r.x + r.w / 2 : align === "right" ? r.x + r.w - NOTE_PAD_X : r.x + NOTE_PAD_X;
+    const free = Math.max(0, r.h - NOTE_PAD_Y * 2 - lines.length * lineHeight);
+    const ty = r.y + NOTE_PAD_Y + (valign === "middle" ? free / 2 : valign === "bottom" ? free : 0);
+    ctx.textAlign = align === "center" ? "center" : align === "right" ? "right" : "start";
+    lines.forEach((l, i) => ctx.fillText(l, tx, ty + i * lineHeight));
+    ctx.textAlign = "start";
   }
 
   const url = canvas.toDataURL("image/png");

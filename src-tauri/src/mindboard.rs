@@ -41,6 +41,9 @@ pub struct MindNode {
     /// Umbruchbreite (Text) bzw. Bildbreite; 0 = automatisch.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub w: f64,
+    /// Mindesthöhe einer Textnotiz; 0 = so hoch wie der Text.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub h: f64,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub text: String,
     /// Projektrelativer Bildpfad ("images/…").
@@ -52,13 +55,19 @@ pub struct MindNode {
     /// Farbcode aus COLOR_PRESETS; leer = Standard.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub color: String,
-    /// "none", "line", "rounded" oder "cloud"; leer = "none".
+    /// "none", "line", "dashed", "rounded" oder "cloud"; leer = "none".
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub border: String,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub font_size: f64,
     #[serde(default, skip_serializing_if = "is_false")]
     pub bold: bool,
+    /// "left", "center" oder "right"; leer = "left".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub align: String,
+    /// "top", "middle" oder "bottom"; leer = "top".
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub valign: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -386,6 +395,7 @@ mod tests {
             x: 0.0,
             y: 0.0,
             w: 0.0,
+            h: 0.0,
             text: String::new(),
             image: String::new(),
             ref_id: String::new(),
@@ -393,6 +403,8 @@ mod tests {
             border: String::new(),
             font_size: 0.0,
             bold: false,
+            align: String::new(),
+            valign: String::new(),
         }
     }
 

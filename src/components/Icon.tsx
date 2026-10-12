@@ -4,6 +4,12 @@
 // Innen-Markup des 24er-Rasters ergänzt.
 
 const PATHS = {
+  "align-center":
+    "<line x1=\"21\" x2=\"3\" y1=\"6\" y2=\"6\" /> <line x1=\"17\" x2=\"7\" y1=\"12\" y2=\"12\" /> <line x1=\"19\" x2=\"5\" y1=\"18\" y2=\"18\" />",
+  "align-left":
+    "<line x1=\"21\" x2=\"3\" y1=\"6\" y2=\"6\" /> <line x1=\"15\" x2=\"3\" y1=\"12\" y2=\"12\" /> <line x1=\"17\" x2=\"3\" y1=\"18\" y2=\"18\" />",
+  "align-right":
+    "<line x1=\"21\" x2=\"3\" y1=\"6\" y2=\"6\" /> <line x1=\"21\" x2=\"9\" y1=\"12\" y2=\"12\" /> <line x1=\"21\" x2=\"7\" y1=\"18\" y2=\"18\" />",
   "arrow-down":
     "<path d=\"M12 5v14\" /> <path d=\"m19 12-7 7-7-7\" />",
   "arrow-left":

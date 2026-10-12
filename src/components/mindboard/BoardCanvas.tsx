@@ -18,15 +18,17 @@ import {
 import { api } from "../../api";
 import { useStore, type PaneId } from "../../store";
 import type {
+  MindAlign,
   MindArrow,
   MindBorder,
   MindEdge,
   MindNode,
   MindShape,
+  MindVAlign,
   MindView,
   Mindboard,
 } from "../../types";
-import { ContextMenu, useContextMenu, type ContextMenuItem } from "../ContextMenu";
+import { ContextMenu, openBelow, useContextMenu, type ContextMenuItem } from "../ContextMenu";
 import { saveClipboardImage } from "../DocImage";
 import { Icon } from "../Icon";
 import { colorSubmenu } from "../NodeActions";
@@ -54,7 +56,9 @@ import {
 import type { UpdateOptions } from "./MindboardPanel";
 import { EdgeLayer, type EdgeGeometry, type EdgeHandlers } from "./EdgeLayer";
 import { IMAGE_DEFAULT_WIDTH, NoteView, type NoteHandlers } from "./NoteView";
+import { InlineInput } from "./InlineInput";
 import { ShapeView, type ShapeHandlers } from "./ShapeView";
+import { loadStyle, storeStyle, styleFields, type NoteStyle } from "./noteStyle";
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 4;
@@ -78,7 +82,15 @@ type Drag =
     }
   | { kind: "box"; startW: Point; additive: boolean; baseNodes: string[]; baseShapes: string[] }
   | { kind: "pan"; startS: Point; startView: MindView }
-  | { kind: "resize-node"; id: string; startW: Point; startWidth: number; base: Mindboard }
+  | {
+      kind: "resize-node";
+      id: string;
+      startW: Point;
+      startWidth: number;
+      /** Nur Textnotizen bekommen beim Ziehen auch eine Höhe. */
+      startHeight: number | null;
+      base: Mindboard;
+    }
   | { kind: "resize-shape"; id: string; startW: Point; start: Size; base: Mindboard };
 
 /** Kopierte Notizen; der Text daneben liegt auch in der System-Zwischenablage
@@ -95,9 +107,44 @@ const FONT_SIZES: { label: string; value: number }[] = [
 const BORDERS: { label: string; value: MindBorder }[] = [
   { label: "Kein Rahmen", value: "none" },
   { label: "Linie", value: "line" },
+  { label: "Gestrichelt", value: "dashed" },
   { label: "Abgerundet", value: "rounded" },
   { label: "Wolke", value: "cloud" },
 ];
+
+const ALIGN_H: { label: string; value: MindAlign; icon: "align-left" | "align-center" | "align-right" }[] = [
+  { label: "Linksbündig", value: "left", icon: "align-left" },
+  { label: "Zentriert", value: "center", icon: "align-center" },
+  { label: "Rechtsbündig", value: "right", icon: "align-right" },
+];
+
+const ALIGN_V: { label: string; value: MindVAlign }[] = [
+  { label: "Oben", value: "top" },
+  { label: "Mitte", value: "middle" },
+  { label: "Unten", value: "bottom" },
+];
+
+/** Menüeinträge für die Textausrichtung, waagrecht und senkrecht. */
+function alignItems(
+  align: MindAlign,
+  valign: MindVAlign,
+  onPick: (p: { align?: MindAlign; valign?: MindVAlign }) => void,
+): ContextMenuItem[] {
+  return [
+    ...ALIGN_H.map((o) => ({
+      label: o.label,
+      icon: o.icon,
+      checked: align === o.value,
+      onSelect: () => onPick({ align: o.value }),
+    })),
+    { kind: "separator" as const },
+    ...ALIGN_V.map((o) => ({
+      label: o.label,
+      checked: valign === o.value,
+      onSelect: () => onPick({ valign: o.value }),
+    })),
+  ];
+}
 
 const ARROWS: { label: string; value: MindArrow }[] = [
   { label: "Keine Pfeile", value: "none" },
@@ -142,6 +189,7 @@ async function naturalWidth(file: File): Promise<number> {
 export function BoardCanvas({
   board,
   name,
+  onRename,
   paneId,
   update,
   getBoard,
@@ -154,6 +202,7 @@ export function BoardCanvas({
 }: {
   board: Mindboard;
   name: string;
+  onRename: (name: string) => void;
   paneId: PaneId;
   update: (next: Mindboard, opts?: UpdateOptions) => void;
   getBoard: () => Mindboard;
@@ -177,6 +226,7 @@ export function BoardCanvas({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingEdge, setEditingEdge] = useState<string | null>(null);
   const [editingShape, setEditingShape] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [box, setBox] = useState<Rect | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
@@ -189,7 +239,11 @@ export function BoardCanvas({
   const fresh = useRef<{ id: string; base: Mindboard } | null>(null);
   const lastPointer = useRef<Point | null>(null);
   const markerId = useId().replace(/:/g, "");
-  const { menu, open: openMenu, close: closeMenu } = useContextMenu();
+  const { menu, open: openMenu, openAt, close: closeMenu } = useContextMenu();
+  /** Vorgabe aus der Werkzeugleiste für neue Notizen. */
+  const [noteStyle, setNoteStyle] = useState<NoteStyle>(loadStyle);
+  const noteStyleRef = useRef(noteStyle);
+  noteStyleRef.current = noteStyle;
   const openResearchNextTo = useStore((s) => s.openResearchNextTo);
   const openSceneNextTo = useStore((s) => s.openSceneNextTo);
 
@@ -316,7 +370,15 @@ export function BoardCanvas({
   const createNote = useCallback(
     (at: Point, extra: Partial<MindNode> = {}, link?: string) => {
       const base = getBoard();
-      const node: MindNode = { id: newId("n"), kind: "text", x: at.x, y: at.y, text: "", ...extra };
+      const node: MindNode = {
+        id: newId("n"),
+        kind: "text",
+        x: at.x,
+        y: at.y,
+        text: "",
+        ...styleFields(noteStyleRef.current),
+        ...extra,
+      };
       let next: Mindboard = { ...base, nodes: [...base.nodes, node] };
       if (link) {
         next = { ...next, edges: [...next.edges, { id: newId("e"), from: link, to: node.id }] };
@@ -442,6 +504,7 @@ export function BoardCanvas({
         id: node.id,
         startW: toWorld(e.clientX, e.clientY),
         startWidth: sizesRef.current[node.id]?.w ?? node.w ?? IMAGE_DEFAULT_WIDTH,
+        startHeight: node.kind === "text" ? (sizesRef.current[node.id]?.h ?? node.h ?? 0) : null,
         base: getBoard(),
       };
       viewportRef.current?.setPointerCapture(e.pointerId);
@@ -541,7 +604,14 @@ export function BoardCanvas({
     }
     if (d.kind === "resize-node") {
       const width = Math.max(40, Math.round(d.startWidth + (w.x - d.startW.x)));
-      update(patchNodes(d.base, [d.id], { w: width }), { history: false });
+      const dy = w.y - d.startW.y;
+      // Die Höhe erst, wenn wirklich nach oben/unten gezogen wird — sonst
+      // bliebe nach reinem Verbreitern eine starre Höhe zurück.
+      const patch: Partial<MindNode> =
+        d.startHeight !== null && Math.abs(dy) * viewRef.current.zoom >= DRAG_THRESHOLD
+          ? { w: width, h: Math.max(20, Math.round(d.startHeight + dy)) }
+          : { w: width };
+      update(patchNodes(d.base, [d.id], patch), { history: false });
       return;
     }
     if (d.kind === "resize-shape") {
@@ -681,6 +751,7 @@ export function BoardCanvas({
             title: "",
             magnetic: true,
           };
+      if (noteStyleRef.current.color) shape.color = noteStyleRef.current.color;
       // Formen liegen hinten — neue ganz hinten, damit sie nichts verdecken.
       update({ ...b, shapes: [shape, ...b.shapes] });
       select([], [shape.id]);
@@ -871,6 +942,7 @@ export function BoardCanvas({
         x: Math.round(at.x),
         y: Math.round(at.y + i * 48),
         text: p,
+        ...styleFields(noteStyleRef.current),
       }));
       update({ ...b, nodes: [...b.nodes, ...nodes] });
       select(nodes.map((n) => n.id));
@@ -998,8 +1070,16 @@ export function BoardCanvas({
         onSelect: () => patch({ bold: !node.bold }),
       });
     }
-    if (node.kind === "text" && node.w && ids.length === 1) {
-      items.push({ label: "Breite automatisch", onSelect: () => patch({ w: 0 }) });
+    if (nodes.some((n) => n.kind === "text")) {
+      items.push({
+        kind: "submenu",
+        label: "Ausrichtung",
+        icon: ALIGN_H.find((o) => o.value === (node.align || "left"))!.icon,
+        items: alignItems(node.align || "left", node.valign || "top", patch),
+      });
+    }
+    if (node.kind === "text" && (node.w || node.h) && ids.length === 1) {
+      items.push({ label: "Größe automatisch", onSelect: () => patch({ w: 0, h: 0 }) });
     }
     items.push({ kind: "separator" });
     if (ids.length > 1) {
@@ -1117,6 +1197,36 @@ export function BoardCanvas({
     ];
   }
 
+  // ---------------------------------------------------------------- Vorgabe
+
+  /** Ändert die Vorgabe für neue Notizen — und, wie man es erwartet, auch
+   *  gleich die ausgewählten Notizen (die Farbe auch ausgewählte Formen). */
+  const changeStyle = (p: Partial<NoteStyle>) => {
+    const next = { ...noteStyle, ...p };
+    setNoteStyle(next);
+    storeStyle(next);
+    if (!selNodes.length && !(p.color !== undefined && selShapes.length)) return;
+    const b = getBoard();
+    let changed = selNodes.length ? patchNodes(b, selNodes, p) : b;
+    if (p.color !== undefined && selShapes.length) {
+      changed = {
+        ...changed,
+        shapes: changed.shapes.map((s) => (selShapes.includes(s.id) ? { ...s, color: p.color } : s)),
+      };
+    }
+    update(changed);
+  };
+
+  const colorItems = () => {
+    const sub = colorSubmenu(noteStyle.color, (color) => changeStyle({ color }));
+    return sub.kind === "submenu" ? sub.items : [];
+  };
+
+  const newNoteAtCenter = () => {
+    const c = viewCenter();
+    createNote({ x: Math.round(c.x - FALLBACK_SIZE.w / 2), y: Math.round(c.y - FALLBACK_SIZE.h / 2) });
+  };
+
   // ---------------------------------------------------------------- Export
 
   const exportPng = async () => {
@@ -1203,7 +1313,21 @@ export function BoardCanvas({
   return (
     <div className="mindboard">
       <div className="mb-toolbar">
-        <h2 title={name}>{name}</h2>
+        {editingName ? (
+          <InlineInput
+            initial={name}
+            placeholder="Name des Mindboards"
+            className="mb-title-input"
+            onDone={(value) => {
+              setEditingName(false);
+              onRename(value);
+            }}
+          />
+        ) : (
+          <h2 className="mb-title" title="Klicken zum Umbenennen" onClick={() => setEditingName(true)}>
+            {name}
+          </h2>
+        )}
         <div className="mb-toolbar-actions">
           <button title="Rückgängig (Strg+Z)" disabled={!canUndo} onClick={undo}>
             <Icon name="undo-2" size={14} />
@@ -1212,12 +1336,78 @@ export function BoardCanvas({
             <Icon name="redo-2" size={14} />
           </button>
           <span className="mb-sep" />
+          <button title="Neue Notiz (Doppelklick auf die Fläche)" onClick={newNoteAtCenter}>
+            <Icon name="plus" size={14} />
+            Notiz
+          </button>
           <button
             title={selNodes.length ? "Form um die Auswahl legen" : "Neue Hintergrundform"}
             onClick={() => addShape(selNodes)}
           >
             <Icon name="square" size={14} />
             Form
+          </button>
+          <span className="mb-sep" />
+          <button
+            title="Farbe (für neue Notizen und die Auswahl)"
+            onClick={(e) => openBelow(e, colorItems(), openAt)}
+          >
+            {noteStyle.color ? (
+              <span className="color-dot mb-style-dot" style={{ background: noteStyle.color }} />
+            ) : (
+              <Icon name="palette" size={14} />
+            )}
+            <Icon name="chevron-down" size={12} />
+          </button>
+          <button
+            title="Rahmen (für neue Notizen und die Auswahl)"
+            onClick={(e) =>
+              openBelow(
+                e,
+                BORDERS.map((o) => ({
+                  label: o.label,
+                  checked: noteStyle.border === o.value,
+                  onSelect: () => changeStyle({ border: o.value }),
+                })),
+                openAt,
+              )
+            }
+          >
+            <Icon name="square" size={14} />
+            <Icon name="chevron-down" size={12} />
+          </button>
+          <button
+            title="Schriftgröße (für neue Notizen und die Auswahl)"
+            onClick={(e) =>
+              openBelow(
+                e,
+                FONT_SIZES.map((o) => ({
+                  label: o.label,
+                  checked: noteStyle.fontSize === o.value,
+                  onSelect: () => changeStyle({ fontSize: o.value }),
+                })),
+                openAt,
+              )
+            }
+          >
+            {FONT_SIZES.find((o) => o.value === noteStyle.fontSize)?.label ?? "Normal"}
+            <Icon name="chevron-down" size={12} />
+          </button>
+          <button
+            className={noteStyle.bold ? "on" : ""}
+            title="Fett (für neue Notizen und die Auswahl)"
+            onClick={() => changeStyle({ bold: !noteStyle.bold })}
+          >
+            <Icon name="bold" size={14} />
+          </button>
+          <button
+            title="Textausrichtung (für neue Notizen und die Auswahl) — senkrecht wirkt sie, wenn die Notiz höher gezogen ist"
+            onClick={(e) =>
+              openBelow(e, alignItems(noteStyle.align, noteStyle.valign, changeStyle), openAt)
+            }
+          >
+            <Icon name={ALIGN_H.find((o) => o.value === noteStyle.align)!.icon} size={14} />
+            <Icon name="chevron-down" size={12} />
           </button>
           <span className="mb-sep" />
           <button title="Verkleinern" onClick={() => zoomAt(1 / 1.2)}>

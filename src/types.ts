@@ -106,8 +106,10 @@ export interface Timeline {
 
 /** Art einer Mindboard-Notiz: freier Text, Bild oder Verweis. */
 export type MindNodeKind = "text" | "image" | "person" | "location" | "scene";
-export type MindBorder = "none" | "line" | "rounded" | "cloud";
+export type MindBorder = "none" | "line" | "dashed" | "rounded" | "cloud";
 export type MindArrow = "none" | "end" | "both";
+export type MindAlign = "left" | "center" | "right";
+export type MindVAlign = "top" | "middle" | "bottom";
 
 /** Eine Notiz auf dem Mindboard. x/y ist die linke obere Ecke. */
 export interface MindNode {
@@ -117,6 +119,8 @@ export interface MindNode {
   y: number;
   /** Umbruchbreite (Text) bzw. Bildbreite; 0/fehlt = automatisch. */
   w?: number;
+  /** Mindesthöhe einer Textnotiz; 0/fehlt = so hoch wie der Text. */
+  h?: number;
   text?: string;
   /** Projektrelativer Bildpfad ("images/…"). */
   image?: string;
@@ -127,6 +131,10 @@ export interface MindNode {
   border?: MindBorder | "";
   fontSize?: number;
   bold?: boolean;
+  /** Textausrichtung; leer = links bzw. oben. Vertikal wirkt sie erst, wenn
+   *  die Notiz höher gezogen ist als ihr Text. */
+  align?: MindAlign | "";
+  valign?: MindVAlign | "";
 }
 
 /** Verbindung zweier Notizen; ein Paar trägt höchstens eine. */
