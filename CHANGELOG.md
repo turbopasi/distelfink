@@ -10,6 +10,32 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.16.0 — 2026-10-13
+
+Kleinere Verbesserungen fürs Mindboard: Notizen lassen sich vorab gestalten,
+Text lässt sich ausrichten, und der Titel ändert sich direkt im Board.
+
+### Neu
+
+- **Notiz aus der Werkzeugleiste.** Neben „Form“ legt der Knopf „Notiz“
+  eine neue Notiz in der Mitte der Ansicht an.
+- **Gestaltung vorab wählen.** Farbe, Rahmen, Schriftgröße, Fett und
+  Ausrichtung stehen jetzt in der Werkzeugleiste. Neue Notizen übernehmen
+  diese Einstellung gleich, neue Formen die Farbe. Sind Notizen markiert,
+  ändern sie sich mit.
+- **Text ausrichten.** Linksbündig, zentriert oder rechtsbündig, dazu oben,
+  mittig oder unten. Damit die senkrechte Ausrichtung etwas bewirkt, lassen
+  sich Textnotizen am Griff jetzt auch höher ziehen; „Größe automatisch“
+  setzt Breite und Höhe zurück.
+- **Gestrichelter Rahmen** als weitere Rahmen-Option.
+- **Titel direkt umbenennen.** Ein Klick auf den Namen oben im Mindboard
+  macht ihn bearbeitbar.
+
+### Geändert
+
+- Der Rahmen „Abgerundet“ ist etwas runder.
+- Der PNG-Export übernimmt Ausrichtung, Höhe und gestrichelte Rahmen.
+
 ## 0.15.0 — 2026-10-12
 
 Der Zeitstrahl ist neu: Ereignisse liegen als Balken auf einer freien
