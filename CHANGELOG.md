@@ -10,6 +10,39 @@ ohne passenden Abschnitt bricht der Release-Workflow ab.
 Die Versionierung folgt der üblichen Lesart für 0.x: Die mittlere Zahl steigt
 bei neuen Funktionen, die letzte bei Fehlerbehebungen.
 
+## 0.17.0 — 2026-10-14
+
+Personen und Orte bekommen einen übersichtlicheren Kopf: ein großes Bild,
+die verknüpften Dokumente direkt unter dem Namen, und Bilder laden
+spürbar schneller.
+
+### Neu
+
+- **Großes Bild im Kopf.** Das Bild einer Person oder eines Orts ist jetzt
+  groß genug, um ein Porträt zu erkennen. Ein Klick darauf wählt ein neues
+  Bild; ohne Bild steht dort ein Platzhalter zum Anklicken.
+- **Bild als Hintergrund.** Dasselbe Bild liegt blass hinter der
+  Kopfleiste und läuft nach rechts aus.
+- **Verknüpfte Dokumente auf einen Blick.** Sie stehen jetzt in einer Zeile
+  unter dem Namen, ohne Umweg über den Info-Knopf. Bis zu drei erscheinen
+  direkt, bei mehr zeigt die Zeile ihre Anzahl und klappt die ganze Liste
+  auf.
+- **Ladeanzeige beim Bildwechsel.** Während ein Bild übernommen wird,
+  dreht sich auf dem Bild ein Ladekreis.
+
+### Geändert
+
+- Bilder werden deutlich schneller übernommen, auch bei großen Fotos.
+- Der Löschen-Knopf im Kopf von Personen und Orten entfällt; gelöscht wird
+  wie gewohnt über das Rechtsklick-Menü in der Sidebar.
+- Der Plus-Knopf zum Verknüpfen ist größer und leichter zu treffen.
+
+### Behoben
+
+- Verknüpfungen auf Dokumente im Papierkorb erschienen als unlesbare
+  Kennung. Sie sind jetzt ausgeblendet und kehren zurück, sobald das
+  Dokument wiederhergestellt wird.
+
 ## 0.16.0 — 2026-10-13
 
 Kleinere Verbesserungen fürs Mindboard: Notizen lassen sich vorab gestalten,
