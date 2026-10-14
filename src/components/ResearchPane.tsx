@@ -32,7 +32,6 @@ export function ResearchPane({
 }) {
   const isActive = useStore((s) => s.activePane === paneId && s.layoutMode !== "single");
   const setActivePane = useStore((s) => s.setActivePane);
-  const setPaneResearchId = useStore((s) => s.setPaneResearchId);
   const researchVersion = useStore((s) => s.researchVersion);
   const projectRoot = useStore((s) => s.project?.root);
 
@@ -79,7 +78,6 @@ export function ResearchPane({
           kind={kind}
           entity={selectedEntity}
           paneId={paneId}
-          onDeleted={() => setPaneResearchId(paneId, null)}
         />
       ) : pending ? null : (
         <div className="research-detail empty">

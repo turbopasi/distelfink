@@ -20,6 +20,32 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # die rustc sonst als Warnung meldet.
 linker_messages = "allow"
 
+# Bildverarbeitung auch unter `tauri dev` optimiert: unoptimiert braucht das
+# Verkleinern eines Fotos mehrere Sekunden. Nur diese Abhängigkeiten — der
+# eigene Code bleibt schnell kompiliert.
+[profile.dev.package.image]
+opt-level = 3
+[profile.dev.package.zune-jpeg]
+opt-level = 3
+[profile.dev.package.zune-core]
+opt-level = 3
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.fdeflate]
+opt-level = 3
+[profile.dev.package.miniz_oxide]
+opt-level = 3
+[profile.dev.package.image-webp]
+opt-level = 3
+[profile.dev.package.gif]
+opt-level = 3
+[profile.dev.package.weezl]
+opt-level = 3
+[profile.dev.package.simd-adler32]
+opt-level = 3
+[profile.dev.package.crc32fast]
+opt-level = 3
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

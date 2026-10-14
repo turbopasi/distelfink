@@ -46,6 +46,7 @@ pub fn run() {
             entities::save_entity,
             entities::duplicate_entity,
             entities::delete_entity,
+            entities::pick_entity_image,
             entities::set_entity_image,
             entities::get_entity_image,
             entities::update_entity_meta,

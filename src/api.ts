@@ -66,9 +66,11 @@ export const api = {
     invoke<Entity>("duplicate_entity", { kind, id }),
   deleteEntity: (kind: EntityKind, id: string) =>
     invoke<void>("delete_entity", { kind, id }),
-  /** Fragt im Backend nach dem Bild; null = abgebrochen. */
-  setEntityImage: (kind: EntityKind, id: string) =>
-    invoke<Entity | null>("set_entity_image", { kind, id }),
+  /** Dateidialog für ein Bild; null = abgebrochen. */
+  pickEntityImage: () => invoke<string | null>("pick_entity_image"),
+  /** Übernimmt das Bild (verkleinert) und liefert es als data-URL. */
+  setEntityImage: (kind: EntityKind, id: string, path: string) =>
+    invoke<string>("set_entity_image", { kind, id, path }),
   getEntityImage: (kind: EntityKind, id: string) =>
     invoke<string | null>("get_entity_image", { kind, id }),
 

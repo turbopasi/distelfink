@@ -1,8 +1,8 @@
-// Person/Ort als freies Dokument: schmaler Meta-Kopf (Name, Bild,
-// Szenen-Verknüpfungen) + TipTap-Editor für den Freitext darunter.
+// Person/Ort als freies Dokument: Meta-Kopf (Bild, Name, Szenen-Verknüpfungen)
+// + TipTap-Editor für den Freitext darunter. Das Bild ist groß genug, um ein
+// Porträt zu erkennen; ein Klick darauf wählt ein neues.
 
 import { useEffect, useState } from "react";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import { useStore, type PaneId } from "../store";
 import { DocEditor } from "./DocEditor";
@@ -26,19 +26,17 @@ export function EntityDoc({
   kind,
   entity,
   paneId,
-  onDeleted,
 }: {
   kind: EntityKind;
   entity: Entity;
   paneId: PaneId;
-  onDeleted: () => void;
 }) {
   const touchResearch = useStore((s) => s.touchResearch);
   const [name, setName] = useState(entity.name);
   const [sceneIds, setSceneIds] = useState<string[]>(entity.sceneIds ?? []);
   const imageKey = `${kind}:${entity.id}`;
   const [image, setImage] = useState<string | null>(() => imageCache.get(imageKey) ?? null);
-  const [metaOpen, setMetaOpen] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
   // Nach „Projekt neu laden“ ist der Bildspeicher leer: neu holen.
   const reloadCount = useStore((s) => s.reloadCount);
 
@@ -77,65 +75,59 @@ export function EntityDoc({
 
   async function chooseImage() {
     try {
-      if (!(await api.setEntityImage(kind, entity.id))) return;
-      const img = await api.getEntityImage(kind, entity.id);
+      const path = await api.pickEntityImage();
+      if (!path) return;
+      // Ab hier wird das Bild gelesen und verkleinert — bei großen Fotos
+      // spürbar, daher der Ladezustand auf dem Avatar.
+      setImageLoading(true);
+      const img = await api.setEntityImage(kind, entity.id, path);
       imageCache.set(imageKey, img);
       setImage(img);
       touchResearch();
     } catch (e) {
       useStore.setState({ error: String(e) });
-    }
-  }
-
-  async function confirmDelete() {
-    const yes = await ask(`"${entity.name}" löschen? (wandert in den Papierkorb des Projekts)`, {
-      title: "Löschen",
-      kind: "warning",
-    });
-    if (!yes) return;
-    try {
-      await api.deleteEntity(kind, entity.id);
-      touchResearch();
-      useStore.getState().touchTrash();
-      onDeleted();
-    } catch (e) {
-      useStore.setState({ error: String(e) });
+    } finally {
+      setImageLoading(false);
     }
   }
 
   return (
     <div className="entity-doc">
       <div className="entity-meta">
-        <div className="detail-header">
-          {image && <img className="entity-avatar" src={image} alt={name} />}
-          <input
-            className="detail-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => void saveName()}
-          />
+        {image && <img className="entity-meta-backdrop" src={image} alt="" aria-hidden />}
+        <div className="detail-header entity-header">
           <button
-            className={metaOpen ? "on" : ""}
-            title="Bild und Dokumenten-Verknüpfungen"
-            onClick={() => setMetaOpen(!metaOpen)}
+            className={`entity-avatar ${image ? "" : "empty"} ${imageLoading ? "loading" : ""}`}
+            title={
+              imageLoading ? "Bild wird übernommen …" : image ? "Bild ersetzen …" : "Bild wählen …"
+            }
+            disabled={imageLoading}
+            aria-busy={imageLoading}
+            onClick={() => void chooseImage()}
           >
-            <Icon name="info" size={14} />
+            {image ? (
+              <img src={image} alt={name} />
+            ) : (
+              <Icon name={kind === "characters" ? "user" : "map-pin"} size={32} />
+            )}
+            <span className="entity-avatar-hint">
+              {imageLoading ? (
+                <span className="entity-avatar-spinner" />
+              ) : (
+                <Icon name="camera" size={18} />
+              )}
+            </span>
           </button>
-          <button title="Löschen" onClick={() => void confirmDelete()}>
-            <Icon name="trash-2" size={14} />
-          </button>
-        </div>
-        {metaOpen && (
-          <div className="entity-meta-details">
-            <div className="detail-image-row">
-              {image && <img className="detail-image" src={image} alt={name} />}
-              <button onClick={() => void chooseImage()}>
-                {image ? "Bild ersetzen …" : "Bild wählen …"}
-              </button>
-            </div>
-            <SceneLinks sceneIds={sceneIds} onChange={(ids) => void saveSceneIds(ids)} />
+          <div className="entity-header-main">
+            <input
+              className="detail-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={() => void saveName()}
+            />
+            <SceneLinks inline sceneIds={sceneIds} onChange={(ids) => void saveSceneIds(ids)} />
           </div>
-        )}
+        </div>
       </div>
       <DocEditor
         docKey={`${kind}:${entity.id}`}

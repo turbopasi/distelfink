@@ -66,11 +66,9 @@ fn shrink(bytes: &[u8]) -> Option<(Vec<u8>, &'static str)> {
         return None;
     }
     let img = image::load_from_memory(bytes).ok()?;
-    let small = img.resize(
-        PREVIEW_MAX,
-        PREVIEW_MAX,
-        image::imageops::FilterType::Lanczos3,
-    );
+    // Flächenmittel statt Lanczos: bei Fotos mit vielen Megapixeln um ein
+    // Vielfaches schneller, beim Verkleinern sichtbar gleich gut.
+    let small = img.thumbnail(PREVIEW_MAX, PREVIEW_MAX);
     let mut out = std::io::Cursor::new(Vec::new());
     if small.color().has_alpha() {
         small.write_to(&mut out, image::ImageFormat::Png).ok()?;

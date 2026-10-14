@@ -13,10 +13,15 @@ import { SCENE_DRAG_TYPE, draggedSceneId, leftFor } from "./drag";
 
 const NO_BINDER: BinderNode[] = [];
 
+/** So viele Verweise stehen in der Kurzform nebeneinander; mehr fasst ein
+ *  Zähler mit Aufklappliste zusammen. */
+const INLINE_MAX = 3;
+
 export function SceneLinks({
   sceneIds,
   onChange,
   incoming,
+  inline = false,
 }: {
   sceneIds: string[];
   onChange: (ids: string[]) => void;
@@ -24,6 +29,9 @@ export function SceneLinks({
    *  (auch als null), nimmt das Ablegen selbst an — die Liste zeigt dann nur,
    *  was beim Loslassen passiert. Ohne Angabe ist die Liste selbst das Ziel. */
   incoming?: string | null;
+  /** Kurzform für Kopfzeilen (Personen, Orte): Symbol, Plus und die Verweise
+   *  in einer Zeile; ab mehr als INLINE_MAX nur ihre Anzahl mit Liste. */
+  inline?: boolean;
 }) {
   const binder = useStore((s) => s.project?.meta.binder ?? NO_BINDER);
   const selectScene = useStore((s) => s.selectScene);
@@ -79,60 +87,143 @@ export function SceneLinks({
   }
 
   const pendingIsNew = !!pending && !sceneIds.includes(pending);
+  const titleOf = (id: string) => findNode(binder, id)?.title ?? id;
+  // Ein gelöschtes Dokument liegt im Papierkorb, die Verknüpfung bleibt aber
+  // gespeichert: ausgeblendet, nicht entfernt — so ist sie nach dem
+  // Wiederherstellen wieder da.
+  const shownIds = sceneIds.filter((id) => findNode(binder, id));
+  const unlink = (id: string) => onChange(sceneIds.filter((s) => s !== id));
+
+  const dropHandlers = ownsDrop
+    ? {
+        onDragOver,
+        onDragLeave: (e: DragEvent) => leftFor(e) && setHovering(null),
+        onDrop,
+      }
+    : {};
+
+  const addButton = (
+    <button
+      className="link-add"
+      title={picker.length > 0 ? "Dokument verknüpfen" : "Noch keine Dokumente im Binder"}
+      disabled={picker.length === 0}
+      onClick={(e) => openBelow(e, picker, openAt)}
+    >
+      <Icon name="plus" size={inline ? 14 : 12} />
+    </button>
+  );
+
+  function linkButton(id: string) {
+    return (
+      <button
+        className="doc-link"
+        title={pending === id ? "Schon verknüpft" : "Dokument öffnen"}
+        onClick={() => void selectScene(id)}
+        onContextMenu={(e) =>
+          openMenu(e, [
+            {
+              label: "Verknüpfung löschen",
+              icon: "unlink-2",
+              danger: true,
+              onSelect: () => unlink(id),
+            },
+          ])
+        }
+      >
+        <Icon name="file-text" size={14} />
+        <span className="doc-link-title">{titleOf(id)}</span>
+      </button>
+    );
+  }
+
+  const pendingPreview = pendingIsNew && (
+    // Vorschau: so steht das Dokument nach dem Loslassen in der Liste.
+    <li className="doc-link-pending">
+      <span className="doc-link">
+        <Icon name="file-text" size={14} />
+        <span className="doc-link-title">{titleOf(pending)}</span>
+      </span>
+    </li>
+  );
+
+  if (inline) {
+    const collapsed = shownIds.length > INLINE_MAX;
+    // Aufklappliste: ein Klick öffnet das Dokument; das Lösen steht gesammelt
+    // darunter, weil ein Menüeintrag kein eigenes Rechtsklick-Menü hat.
+    const listItems: ContextMenuItem[] = [
+      ...shownIds.map(
+        (id): ContextMenuItem => ({
+          label: titleOf(id),
+          icon: "file-text",
+          onSelect: () => void selectScene(id),
+        }),
+      ),
+      { kind: "separator" },
+      {
+        kind: "submenu",
+        label: "Verknüpfung löschen",
+        icon: "unlink-2",
+        items: shownIds.map(
+          (id): ContextMenuItem => ({
+            label: titleOf(id),
+            icon: "file-text",
+            danger: true,
+            onSelect: () => unlink(id),
+          }),
+        ),
+      },
+    ];
+    return (
+      <div
+        className={`scene-links inline ${ownsDrop && pendingIsNew ? "drop-here" : ""}`}
+        {...dropHandlers}
+      >
+        <span className="scene-links-icon" title="Verknüpfte Dokumente">
+          <Icon name="link-2" size={14} />
+        </span>
+        {addButton}
+        <ul className="doc-links">
+          {collapsed ? (
+            <li className={pending && sceneIds.includes(pending) ? "already" : undefined}>
+              <button
+                className="doc-link"
+                title="Alle verknüpften Dokumente"
+                onClick={(e) => openBelow(e, listItems, openAt)}
+              >
+                <span className="doc-link-title">{shownIds.length} Dokumente</span>
+                <Icon name="chevron-down" size={12} />
+              </button>
+            </li>
+          ) : (
+            shownIds.map((id) => (
+              <li key={id} className={pending === id ? "already" : undefined}>
+                {linkButton(id)}
+              </li>
+            ))
+          )}
+          {pendingPreview}
+        </ul>
+        {menu && <ContextMenu {...menu} onClose={closeMenu} />}
+      </div>
+    );
+  }
 
   return (
     <div
       className={`link-section scene-links ${ownsDrop && pendingIsNew ? "drop-here" : ""}`}
-      onDragOver={ownsDrop ? onDragOver : undefined}
-      onDragLeave={ownsDrop ? (e) => leftFor(e) && setHovering(null) : undefined}
-      onDrop={ownsDrop ? onDrop : undefined}
+      {...dropHandlers}
     >
       <div className="link-section-header">
         <span className="small muted">Verknüpfte Dokumente</span>
-        <button
-          className="link-add"
-          title={picker.length > 0 ? "Dokument verknüpfen" : "Noch keine Dokumente im Binder"}
-          disabled={picker.length === 0}
-          onClick={(e) => openBelow(e, picker, openAt)}
-        >
-          <Icon name="plus" size={12} />
-        </button>
+        {addButton}
       </div>
       <ul className="doc-links">
-        {sceneIds.map((id) => {
-          const node = findNode(binder, id);
-          return (
-            <li key={id} className={pending === id ? "already" : undefined}>
-              <button
-                className="doc-link"
-                title={pending === id ? "Schon verknüpft" : "Dokument öffnen"}
-                onClick={() => void selectScene(id)}
-                onContextMenu={(e) =>
-                  openMenu(e, [
-                    {
-                      label: "Verknüpfung löschen",
-                      icon: "unlink-2",
-                      danger: true,
-                      onSelect: () => onChange(sceneIds.filter((s) => s !== id)),
-                    },
-                  ])
-                }
-              >
-                <Icon name="file-text" size={14} />
-                <span className="doc-link-title">{node?.title ?? id}</span>
-              </button>
-            </li>
-          );
-        })}
-        {pendingIsNew && (
-          // Vorschau: so steht das Dokument nach dem Loslassen in der Liste.
-          <li className="doc-link-pending">
-            <span className="doc-link">
-              <Icon name="file-text" size={14} />
-              <span className="doc-link-title">{findNode(binder, pending)?.title ?? pending}</span>
-            </span>
+        {shownIds.map((id) => (
+          <li key={id} className={pending === id ? "already" : undefined}>
+            {linkButton(id)}
           </li>
-        )}
+        ))}
+        {pendingPreview}
       </ul>
       {menu && <ContextMenu {...menu} onClose={closeMenu} />}
     </div>
